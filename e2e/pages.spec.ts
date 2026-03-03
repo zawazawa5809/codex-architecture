@@ -22,12 +22,8 @@ for (const { path, title } of pages) {
     // Page should not have a 404/500 status
     expect(page.url()).toContain("localhost:4321");
 
-    // Verify page title (supports string or RegExp)
-    if (typeof title === "string") {
-      await expect(page).toHaveTitle(title);
-    } else {
-      await expect(page).toHaveTitle(title);
-    }
+    // Verify page title
+    await expect(page).toHaveTitle(title);
 
     // No console errors
     expect(consoleErrors).toHaveLength(0);

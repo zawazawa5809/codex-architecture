@@ -148,8 +148,8 @@ const sections = [
   });
 
   // Close on outside click
+  const nav = document.getElementById("main-nav");
   document.addEventListener("click", (e) => {
-    const nav = document.getElementById("main-nav");
     if (nav && !nav.contains(e.target as Node) && !menu?.classList.contains("hidden")) {
       closeMenu();
     }

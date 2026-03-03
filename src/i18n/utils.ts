@@ -69,7 +69,7 @@ const translations = {
     "card.designDesc": "SQ/EQ, context management, tool orchestration are universal design patterns",
     "card.builder": "From User to Builder",
     "card.builderDesc": "Understanding internals enables building your own agents",
-    "hero.cta": "Read the Guide",
+    "hero.cta": "Read the guide",
     "footer.licenseTitle": "License",
     "footer.licenseBody":
       "Code snippets from Codex CLI are used under the Apache License 2.0. This site is an independent educational resource and is not affiliated with or endorsed by OpenAI.",
