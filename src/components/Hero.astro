@@ -12,35 +12,36 @@ const t = useTranslation(lang);
 <section class="relative overflow-hidden pb-20 pt-32">
   <!-- Glow effects -->
   <div
-    class="pointer-events-none absolute left-1/4 top-0 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-[var(--color-accent-indigo)] opacity-[0.07] blur-[120px]"
+    class="glow-animate pointer-events-none absolute left-1/4 top-0 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[var(--color-accent-indigo)] opacity-[0.08] blur-[140px]"
   >
   </div>
   <div
-    class="pointer-events-none absolute right-1/4 top-20 h-[400px] w-[400px] -translate-x-1/2 rounded-full bg-[var(--color-accent-cyan)] opacity-[0.05] blur-[120px]"
+    class="glow-animate pointer-events-none absolute right-1/4 top-20 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-[var(--color-accent-cyan)] opacity-[0.06] blur-[140px]"
+    style="animation-delay: -4s;"
   >
   </div>
 
   <div class="relative mx-auto max-w-4xl px-4 text-center">
     <div
-      class="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-white/5 px-4 py-1.5"
+      class="hero-enter mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-white/5 px-4 py-1.5"
     >
       <span class="h-2 w-2 rounded-full bg-[var(--color-accent-emerald)] animate-pulse"></span>
       <span class="text-xs text-[var(--color-text-secondary)]">OpenAI Codex CLI — Apache-2.0</span>
     </div>
 
-    <h1 class="mb-4 text-5xl font-bold tracking-tight md:text-6xl">
+    <h1 class="hero-enter-delay-1 mb-4 text-5xl font-bold tracking-tight md:text-6xl">
       <span class="text-[var(--color-text-primary)]">{t("hero.title")}</span>
     </h1>
 
-    <p class="mb-8 text-xl text-[var(--color-accent-cyan)] md:text-2xl">
+    <p class="hero-enter-delay-1 mb-8 text-xl text-[var(--color-accent-cyan)] md:text-2xl">
       {t("hero.subtitle")}
     </p>
 
-    <p class="mb-10 font-mono text-sm text-[var(--color-text-muted)]">
+    <p class="hero-enter-delay-2 mb-10 font-mono text-sm text-[var(--color-text-muted)]">
       {t("hero.stats")}
     </p>
 
-    <div class="flex justify-center gap-4">
+    <div class="hero-enter-delay-3 flex justify-center gap-4">
       <a
         href="#overview"
         class="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent-indigo)] px-6 py-3 text-sm font-medium text-white transition-all hover:bg-[var(--color-accent-indigo)]/80 hover:shadow-lg hover:shadow-[var(--color-accent-indigo)]/20"

@@ -56,10 +56,10 @@ const whyCards = [
       <h2 class="mb-12 text-center text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
         {t("section.whyStudy")}
       </h2>
-      <div class="grid gap-6 md:grid-cols-3">
+      <div class="reveal grid gap-6 md:grid-cols-3">
         {
           whyCards.map((card) => (
-            <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 transition-all hover:border-[var(--color-accent-indigo)]/50 hover:bg-white/[0.04]">
+            <div class="card-hover rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 hover:border-[var(--color-accent-indigo)]/50 hover:bg-white/[0.04]">
               <div
                 class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg text-2xl"
                 style={`background: color-mix(in srgb, ${card.color} 15%, transparent)`}
@@ -79,7 +79,7 @@ const whyCards = [
 
   <!-- Section 1: Architecture Overview -->
   <section id="overview" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">1</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">アーキテクチャ概要</h2>
@@ -106,7 +106,7 @@ const whyCards = [
 
   <!-- Section 2: Agent Loop -->
   <section id="agent-loop" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">2</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">エージェントループ</h2>
@@ -126,7 +126,7 @@ const whyCards = [
 
   <!-- Section 3: Tool System -->
   <section id="tool-system" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">3</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">ツールシステム</h2>
@@ -146,7 +146,7 @@ const whyCards = [
 
   <!-- Section 4: Sandbox Security (★MAIN) -->
   <section id="sandbox" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-rose)]/20 font-mono text-sm text-[var(--color-accent-rose)]">4</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">サンドボックスセキュリティ</h2>
@@ -167,7 +167,7 @@ const whyCards = [
 
   <!-- Section 5: Approval System -->
   <section id="approval" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">5</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">承認システム</h2>
@@ -187,7 +187,7 @@ const whyCards = [
 
   <!-- Section 6: Configuration -->
   <section id="config" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">6</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">設定システム</h2>
@@ -201,7 +201,7 @@ const whyCards = [
 
   <!-- Section 7: Comparison -->
   <section id="comparison" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">7</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">ツール比較</h2>
@@ -219,7 +219,7 @@ const whyCards = [
 
   <!-- Section 8: Takeaways -->
   <section id="takeaways" class="border-t border-[var(--color-border)] py-20">
-    <div class="mx-auto max-w-6xl px-4">
+    <div class="reveal mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-emerald)]/20 font-mono text-sm text-[var(--color-accent-emerald)]">8</span>
         <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">設計パターンまとめ</h2>
