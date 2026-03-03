@@ -4,8 +4,8 @@ import mdx from "@astrojs/mdx";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  // TODO: Set to your GitHub Pages URL (e.g., "https://<user>.github.io/<repo>")
-  // site: "https://example.github.io/codex-architecture",
+  site: "https://zawazawa5809.github.io",
+  base: "/codex-architectuer",
   integrations: [react(), mdx()],
   vite: {
     plugins: [tailwindcss()],

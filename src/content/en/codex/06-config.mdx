@@ -1,0 +1,208 @@
+---
+title: "Configuration System"
+order: 6
+description: "Layered TOML configuration, Feature Flags, and the Constrained<T> pattern for type-safe config value constraints"
+---
+
+## Layered TOML Configuration
+
+Codex CLI's configuration is assembled by merging **three layers of TOML files**. Lower layers override higher ones.
+
+```
+~/.codex/config.toml          # Global: user-wide settings
+<project>/.codex/config.toml   # Project: project-specific settings
+<project>/.codex.toml          # Local: local overrides
+```
+
+### The Config Struct
+
+```rust
+/// Application configuration loaded from disk and merged
+/// with overrides.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Config {
+    /// Provenance for how this Config was derived
+    /// (merged layers + enforced requirements).
+    pub config_layer_stack: ConfigLayerStack,
+
+    /// Warnings collected during config load.
+    pub startup_warnings: Vec<String>,
+
+    /// Optional override of model selection.
+    pub model: Option<String>,
+
+    /// Size of the context window for the model, in tokens.
+    pub model_context_window: Option<i64>,
+
+    /// Token threshold triggering auto-compaction.
+    pub model_auto_compact_token_limit: Option<i64>,
+
+    /// Effective permission configuration.
+    pub permissions: Permissions,
+
+    /// Definition for MCP servers.
+    pub mcp_servers: Constrained<HashMap<String, McpServerConfig>>,
+
+    /// Combined provider map.
+    pub model_providers: HashMap<String, ModelProviderInfo>,
+
+    /// The working directory for the session.
+    pub cwd: PathBuf,
+
+    // ...
+}
+```
+{/* source: codex-rs/core/src/config/mod.rs:L148-L350 */}
+
+### The Permissions Struct
+
+```rust
+pub struct Permissions {
+    /// Approval policy for executing commands.
+    pub approval_policy: Constrained<AskForApproval>,
+
+    /// Effective sandbox policy used for shell/unified exec.
+    pub sandbox_policy: Constrained<SandboxPolicy>,
+
+    /// Effective network configuration.
+    pub network: Option<NetworkProxySpec>,
+
+    /// Whether the model may request a login shell.
+    pub allow_login_shell: bool,
+
+    /// Policy used to build process environments.
+    pub shell_environment_policy: ShellEnvironmentPolicy,
+
+    /// Windows sandbox mode.
+    pub windows_sandbox_mode: Option<WindowsSandboxModeToml>,
+
+    /// macOS seatbelt extension profile.
+    pub macos_seatbelt_profile_extensions:
+        Option<MacOsSeatbeltProfileExtensions>,
+}
+```
+{/* source: codex-rs/core/src/config/mod.rs:L150-L174 */}
+
+Both `approval_policy` and `sandbox_policy` are wrapped in `Constrained<T>`, which applies constraints to any changes to these values.
+
+## The `Constrained<T>` Pattern
+
+`Constrained<T>` is a pattern that enables **type-safe config value constraints**.
+
+```rust
+/// A ConstraintValidator is a function that validates a value.
+/// It returns Ok(()) if the value is valid, or Err with a
+/// description of the constraint violation.
+type ConstraintValidator<T> =
+    dyn Fn(&T) -> Result<(), String> + Send + Sync;
+
+/// A ConstraintNormalizer transforms a value into another
+/// of the same type.
+type ConstraintNormalizer<T> =
+    dyn Fn(T) -> T + Send + Sync;
+
+#[derive(Clone)]
+pub struct Constrained<T> {
+    value: T,
+    validator: Arc<ConstraintValidator<T>>,
+    normalizer: Option<Arc<ConstraintNormalizer<T>>>,
+}
+```
+{/* source: codex-rs/config/src/constraint.rs:L46-L55 */}
+
+### Design Intent
+
+1. **Invariant guarantees**: Validators ensure config values always stay within valid ranges
+2. **Normalization**: Normalizers automatically apply related adjustments when config values change
+3. **Constraint propagation**: Enforces organizational security requirements at the config level
+
+### Usage Example
+
+For instance, a constraint can be set on `approval_policy` to disallow `Never` under organizational policy.
+
+```rust
+// Conceptual usage example
+let constrained_policy = Constrained::new(
+    AskForApproval::OnRequest,
+    |policy| {
+        if matches!(policy, AskForApproval::Never) {
+            Err("Organization policy requires approval".into())
+        } else {
+            Ok(())
+        }
+    },
+);
+```
+
+## ConfigLayerStack
+
+Tracks the provenance of each config value — which layer and which config file it came from.
+
+```rust
+pub struct ConfigLayerStack {
+    // merged layers + enforced requirements
+}
+```
+
+This allows diagnosing which layer took precedence when a config conflict occurs.
+
+## Feature Flags
+
+Codex CLI uses **Feature Flags** to control the rollout of new functionality.
+
+```rust
+pub struct Features {
+    // ...
+}
+
+impl Features {
+    pub fn enabled(&self, feature: Feature) -> bool {
+        // ...
+    }
+}
+```
+
+### Feature Flag Lifecycle
+
+1. **`UnderDevelopment`**: In development. Disabled by default
+2. **Gradual Rollout**: Enabled for a subset of users
+3. **`Default`**: Enabled for all users
+4. **Code Cleanup**: Flag removed; feature integrated into the regular code path
+
+Feature flag examples:
+
+| Flag | Feature |
+|------|---------|
+| `ResponsesWebsockets` | WebSocket streaming |
+| `ResponsesWebsocketsV2` | WebSocket V2 protocol |
+| `UseLinuxSandboxBwrap` | bubblewrap sandbox |
+| `Apps` | Application integrations |
+
+## TOML Configuration Example
+
+```toml
+# ~/.codex/config.toml
+
+# Model settings
+model = "o4-mini"
+
+# Approval policy
+[permissions]
+approval_policy = "on-request"
+
+[permissions.sandbox]
+type = "workspace-write"
+network_access = false
+
+# MCP server configuration
+[mcp_servers.github]
+command = "gh-mcp"
+args = ["serve"]
+
+# Notification settings
+notify = ["notify-send", "Codex"]
+
+# TUI settings
+[tui]
+alternate_screen = "auto"
+```

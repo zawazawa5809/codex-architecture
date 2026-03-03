@@ -1,0 +1,423 @@
+---
+title: "Sandbox Security"
+order: 4
+description: "Defense-in-Depth strategy, Linux/macOS/Windows sandbox implementations, SandboxPolicy, and network proxy"
+---
+
+## Defense-in-Depth Strategy
+
+Codex CLI's security is based on a **Defense-in-Depth** strategy. Given that an AI agent can execute arbitrary commands, multiple security layers are combined to reduce risk.
+
+1. **Approval system**: User approval before execution (detailed in the next section)
+2. **Execution policy**: Command allow/deny rules via Starlark DSL
+3. **Sandbox**: OS-level process isolation
+4. **Network control**: Proxy-based network access management
+5. **Process hardening**: Prevention of privilege escalation
+
+## The `SandboxPolicy` Enum
+
+Sandbox behavior is defined in a type-safe manner as a policy.
+
+```rust
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum SandboxPolicy {
+    /// No restrictions whatsoever. Use with caution.
+    DangerFullAccess,
+
+    /// Read-only access configuration.
+    ReadOnly {
+        access: ReadOnlyAccess,
+    },
+
+    /// Indicates the process is already in an external sandbox.
+    ExternalSandbox {
+        network_access: NetworkAccess,
+    },
+
+    /// Read + write access to workspace directory.
+    WorkspaceWrite {
+        writable_roots: Vec<AbsolutePathBuf>,
+        read_only_access: ReadOnlyAccess,
+        network_access: bool,
+        exclude_tmpdir_env_var: bool,
+        exclude_slash_tmp: bool,
+    },
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L609-L669 */}
+
+### WritableRoot and Read-Only Subpaths
+
+```rust
+/// A writable root path accompanied by a list of subpaths that
+/// should remain read-only even when the root is writable.
+/// This ensures folders like `.codex`, `.git` (notably `.git/hooks`)
+/// cannot be modified by the agent.
+pub struct WritableRoot {
+    pub root: AbsolutePathBuf,
+    pub read_only_subpaths: Vec<AbsolutePathBuf>,
+}
+
+impl WritableRoot {
+    pub fn is_path_writable(&self, path: &Path) -> bool {
+        if !path.starts_with(&self.root) {
+            return false;
+        }
+        for subpath in &self.read_only_subpaths {
+            if path.starts_with(subpath) {
+                return false;
+            }
+        }
+        true
+    }
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L671-L700 */}
+
+Directories like `.git/hooks` and `.codex` are protected as read-only even when they reside inside a writable root. This design prevents privilege escalation attacks by the agent.
+
+## `SandboxManager`
+
+`SandboxManager` handles sandbox selection and transformation based on the current platform.
+
+```rust
+#[derive(Default)]
+pub struct SandboxManager;
+
+impl SandboxManager {
+    pub(crate) fn select_initial(
+        &self,
+        policy: &SandboxPolicy,
+        pref: SandboxablePreference,
+        windows_sandbox_level: WindowsSandboxLevel,
+        has_managed_network_requirements: bool,
+    ) -> SandboxType {
+        match pref {
+            SandboxablePreference::Forbid => SandboxType::None,
+            SandboxablePreference::Require => {
+                crate::safety::get_platform_sandbox(
+                    windows_sandbox_level
+                        != WindowsSandboxLevel::Disabled,
+                )
+                .unwrap_or(SandboxType::None)
+            }
+            SandboxablePreference::Auto => match policy {
+                SandboxPolicy::DangerFullAccess
+                | SandboxPolicy::ExternalSandbox { .. } => {
+                    if has_managed_network_requirements {
+                        crate::safety::get_platform_sandbox(/* ... */)
+                            .unwrap_or(SandboxType::None)
+                    } else {
+                        SandboxType::None
+                    }
+                }
+                _ => crate::safety::get_platform_sandbox(/* ... */)
+                    .unwrap_or(SandboxType::None),
+            },
+        }
+    }
+}
+```
+{/* source: codex-rs/core/src/sandboxing/mod.rs:L252-L294 */}
+
+### Platform Detection
+
+```rust
+pub fn get_platform_sandbox(
+    windows_sandbox_enabled: bool,
+) -> Option<SandboxType> {
+    if cfg!(target_os = "macos") {
+        Some(SandboxType::MacosSeatbelt)
+    } else if cfg!(target_os = "linux") {
+        Some(SandboxType::LinuxSeccomp)
+    } else if cfg!(target_os = "windows") {
+        if windows_sandbox_enabled {
+            Some(SandboxType::WindowsRestrictedToken)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+```
+{/* source: codex-rs/core/src/safety.rs:L107-L121 */}
+
+## Linux Sandbox
+
+On Linux, **three sandbox layers** are combined.
+
+### 1. bubblewrap (Filesystem Isolation)
+
+bubblewrap (`bwrap`) uses user namespaces to construct a controlled view of the filesystem.
+
+```rust
+/// Bubblewrap-based filesystem sandboxing for Linux.
+///
+/// - the filesystem is read-only by default,
+/// - explicit writable roots are layered on top, and
+/// - sensitive subpaths such as `.git` and `.codex` remain read-only
+///   even when their parent root is writable.
+
+pub(crate) fn create_bwrap_command_args(
+    command: Vec<String>,
+    sandbox_policy: &SandboxPolicy,
+    cwd: &Path,
+    options: BwrapOptions,
+) -> Result<Vec<String>> {
+    if sandbox_policy.has_full_disk_write_access() {
+        return if options.network_mode
+            == BwrapNetworkMode::FullAccess
+        {
+            Ok(command)
+        } else {
+            Ok(create_bwrap_flags_full_filesystem(
+                command, options
+            ))
+        };
+    }
+    create_bwrap_flags(command, sandbox_policy, cwd, options)
+}
+```
+{/* source: codex-rs/linux-sandbox/src/bwrap.rs:L1-L101 */}
+
+Key bubblewrap flags:
+
+```rust
+fn create_bwrap_flags(/* ... */) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    args.push("--new-session".to_string());
+    args.push("--die-with-parent".to_string());
+    args.extend(create_filesystem_args(sandbox_policy, cwd)?);
+    args.push("--unshare-pid".to_string());
+    if options.network_mode.should_unshare_network() {
+        args.push("--unshare-net".to_string());
+    }
+    if options.mount_proc {
+        args.push("--proc".to_string());
+        args.push("/proc".to_string());
+    }
+    args.push("--".to_string());
+    args.extend(command);
+    Ok(args)
+}
+```
+{/* source: codex-rs/linux-sandbox/src/bwrap.rs:L125-L148 */}
+
+- `--new-session`: Creates a new session, isolating signals
+- `--die-with-parent`: Terminates the child process when the parent exits
+- `--unshare-pid`: Isolates the PID namespace
+- `--unshare-net`: Isolates the network namespace
+
+#### Platform Defaults
+
+The minimum set of system paths required for restricted read access is defined as follows.
+
+```rust
+const LINUX_PLATFORM_DEFAULT_READ_ROOTS: &[&str] = &[
+    "/bin",
+    "/sbin",
+    "/usr",
+    "/etc",
+    "/lib",
+    "/lib64",
+    "/nix/store",
+    "/run/current-system/sw",
+];
+```
+{/* source: codex-rs/linux-sandbox/src/bwrap.rs:L26-L35 */}
+
+### 2. Landlock (Access Control)
+
+Landlock is a Linux kernel security module that restricts filesystem access.
+
+```rust
+/// Apply sandbox policies inside this thread so only the child
+/// inherits them, not the entire CLI process.
+pub(crate) fn apply_sandbox_policy_to_current_thread(
+    sandbox_policy: &SandboxPolicy,
+    cwd: &Path,
+    apply_landlock_fs: bool,
+    allow_network_for_proxy: bool,
+    proxy_routed_network: bool,
+) -> Result<()> {
+    let network_seccomp_mode = network_seccomp_mode(
+        sandbox_policy,
+        allow_network_for_proxy,
+        proxy_routed_network,
+    );
+
+    // PR_SET_NO_NEW_PRIVS is required for seccomp
+    if network_seccomp_mode.is_some()
+        || (apply_landlock_fs
+            && !sandbox_policy.has_full_disk_write_access())
+    {
+        set_no_new_privs()?;
+    }
+
+    if let Some(mode) = network_seccomp_mode {
+        install_network_seccomp_filter_on_current_thread(mode)?;
+    }
+
+    if apply_landlock_fs
+        && !sandbox_policy.has_full_disk_write_access()
+    {
+        let writable_roots = sandbox_policy
+            .get_writable_roots_with_cwd(cwd)
+            .into_iter()
+            .map(|wr| wr.root)
+            .collect();
+        install_filesystem_landlock_rules_on_current_thread(
+            writable_roots
+        )?;
+    }
+
+    Ok(())
+}
+```
+{/* source: codex-rs/linux-sandbox/src/landlock.rs:L41-L85 */}
+
+Landlock rules make the entire filesystem readable while restricting writes to explicitly allowed paths only.
+
+### 3. seccomp BPF (Network Control)
+
+seccomp BPF controls network access at the system call level.
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NetworkSeccompMode {
+    /// Block all network system calls.
+    Restricted,
+    /// Allow only proxy-routed connections.
+    ProxyRouted,
+}
+```
+{/* source: codex-rs/linux-sandbox/src/landlock.rs:L87-L91 */}
+
+- `Restricted`: Blocks all network-related system calls
+- `ProxyRouted`: Allows only proxy-routed connections
+
+## macOS Sandbox (Seatbelt)
+
+On macOS, **sandbox-exec** with **SBPL (Sandbox Profile Language)** profiles is used.
+
+```rust
+/// When working with sandbox-exec, only consider sandbox-exec in
+/// /usr/bin to defend against an attacker trying to inject a
+/// malicious version on the PATH.
+pub(crate) const MACOS_PATH_TO_SEATBELT_EXECUTABLE: &str =
+    "/usr/bin/sandbox-exec";
+
+const MACOS_SEATBELT_BASE_POLICY: &str =
+    include_str!("seatbelt_base_policy.sbpl");
+const MACOS_SEATBELT_NETWORK_POLICY: &str =
+    include_str!("seatbelt_network_policy.sbpl");
+const MACOS_SEATBELT_PLATFORM_DEFAULTS: &str =
+    include_str!("seatbelt_platform_defaults.sbpl");
+```
+{/* source: codex-rs/core/src/seatbelt.rs:L26-L34 */}
+
+### Security Considerations
+
+- Only `/usr/bin/sandbox-exec` is used for `sandbox-exec`. This defends against PATH injection attacks.
+- Three-layer policy composition: base policy + network policy + platform defaults
+- Extension profiles (`MacOsSeatbeltProfileExtensions`) can grant additional permissions
+
+### Sandbox Transformation
+
+```rust
+pub(crate) fn transform(
+    &self,
+    request: SandboxTransformRequest<'_>,
+) -> Result<ExecRequest, SandboxTransformError> {
+    // ...
+    let (command, sandbox_env, arg0_override) = match sandbox {
+        SandboxType::None => (command, HashMap::new(), None),
+        #[cfg(target_os = "macos")]
+        SandboxType::MacosSeatbelt => {
+            let mut seatbelt_env = HashMap::new();
+            seatbelt_env.insert(
+                CODEX_SANDBOX_ENV_VAR.to_string(),
+                "seatbelt".to_string(),
+            );
+            let mut args =
+                create_seatbelt_command_args_with_extensions(
+                    command.clone(),
+                    &effective_policy,
+                    sandbox_policy_cwd,
+                    enforce_managed_network,
+                    network,
+                    macos_seatbelt_profile_extensions,
+                );
+            // ...
+            (full_command, seatbelt_env, None)
+        }
+        SandboxType::LinuxSeccomp => {
+            let exe = codex_linux_sandbox_exe.ok_or(
+                SandboxTransformError::
+                    MissingLinuxSandboxExecutable
+            )?;
+            let args = create_linux_sandbox_command_args(
+                command.clone(),
+                &effective_policy,
+                sandbox_policy_cwd,
+                use_linux_sandbox_bwrap,
+                allow_proxy_network,
+            );
+            // ...
+        }
+        // Windows: restricted token sandbox
+        SandboxType::WindowsRestrictedToken =>
+            (command, HashMap::new(), None),
+    };
+    // ...
+}
+```
+{/* source: codex-rs/core/src/sandboxing/mod.rs:L296-L397 */}
+
+## Windows Sandbox
+
+On Windows, **Restricted Tokens** and **ACL manipulation** are used. The `codex-windows-sandbox` crate applies the sandbox within the process.
+
+## Network Proxy Bridge
+
+When network access is required, communication is routed through a **proxy bridge** rather than allowing direct connections.
+
+```rust
+#[derive(Debug)]
+pub struct ExecRequest {
+    pub command: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: HashMap<String, String>,
+    pub network: Option<NetworkProxy>,
+    pub expiration: ExecExpiration,
+    pub sandbox: SandboxType,
+    pub sandbox_policy: SandboxPolicy,
+    // ...
+}
+```
+{/* source: codex-rs/core/src/sandboxing/mod.rs:L51-L64 */}
+
+The `NetworkProxy` field means that processes inside the sandbox can only access the network through the proxy. Fine-grained network policies are enforced by controlling the allowed hosts and ports on the proxy side.
+
+### Network Control Overview
+
+```
+┌─────────────────┐     ┌──────────────┐     ┌─────────┐
+│  Sandboxed      │────▶│  Network     │────▶│  External│
+│  Process        │     │  Proxy       │     │  API    │
+│  (direct net    │     │  (policy     │     │         │
+│   blocked by    │     │   enforced)  │     │         │
+│   seccomp)      │     │              │     │         │
+└─────────────────┘     └──────────────┘     └─────────┘
+```
+
+## Process Hardening
+
+In addition to the sandbox, the following process-level protections are applied.
+
+- **`PR_SET_NO_NEW_PRIVS`**: Prevents privilege escalation; disables setuid binary execution
+- **`--die-with-parent`**: Ensures child processes exit when the parent process terminates
+- **`--new-session`**: Isolates signals
+- **PID namespace isolation**: Limits process visibility

@@ -1,0 +1,234 @@
+---
+title: "Tool System"
+order: 3
+description: "ToolHandler trait, ToolRegistry, parallel tool execution, built-in tools, and MCP integration"
+---
+
+## Tool System Design Philosophy
+
+Codex CLI's tool system is designed around the **trait-based registration** pattern. Each tool implements the `ToolHandler` trait and is registered in the `ToolRegistry`. This design makes adding new tools straightforward and guarantees type safety.
+
+## The `ToolHandler` Trait
+
+```rust
+#[async_trait]
+pub trait ToolHandler: Send + Sync {
+    fn kind(&self) -> ToolKind;
+
+    fn matches_kind(&self, payload: &ToolPayload) -> bool {
+        matches!(
+            (self.kind(), payload),
+            (ToolKind::Function, ToolPayload::Function { .. })
+                | (ToolKind::Mcp, ToolPayload::Mcp { .. })
+        )
+    }
+
+    /// Returns `true` if the ToolInvocation *might* mutate the
+    /// environment of the user (file system, OS operations, ...).
+    async fn is_mutating(
+        &self, _invocation: &ToolInvocation
+    ) -> bool {
+        false
+    }
+
+    /// Perform the actual ToolInvocation and returns a ToolOutput.
+    async fn handle(
+        &self, invocation: ToolInvocation
+    ) -> Result<ToolOutput, FunctionCallError>;
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L33-L56 */}
+
+### Trait Design Highlights
+
+- **`kind()`**: Returns the tool's type (`Function` / `Mcp`). Used for consistency checks against the payload type.
+- **`is_mutating()`**: Determines whether the tool might modify the environment. Mutating tools are serialized via the **tool_call_gate**.
+- **`handle()`**: The actual tool execution logic. Returns `ToolOutput` asynchronously.
+
+## `ToolRegistry`
+
+`ToolRegistry` maintains a mapping from tool names to handlers and performs dispatch.
+
+```rust
+pub struct ToolRegistry {
+    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+}
+
+impl ToolRegistry {
+    pub fn new(
+        handlers: HashMap<String, Arc<dyn ToolHandler>>
+    ) -> Self {
+        Self { handlers }
+    }
+
+    pub fn handler(
+        &self, name: &str
+    ) -> Option<Arc<dyn ToolHandler>> {
+        self.handlers.get(name).map(Arc::clone)
+    }
+
+    pub async fn dispatch(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<ResponseInputItem, FunctionCallError> {
+        let tool_name = invocation.tool_name.clone();
+        let handler = match self.handler(tool_name.as_ref()) {
+            Some(handler) => handler,
+            None => {
+                return Err(FunctionCallError::RespondToModel(
+                    unsupported_tool_call_message(
+                        &invocation.payload, tool_name.as_ref()
+                    )
+                ));
+            }
+        };
+        // ... validation, execution, hooks
+    }
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L58-L223 */}
+
+### `ToolRegistryBuilder`
+
+Tool registration is performed through the `ToolRegistryBuilder`.
+
+```rust
+pub struct ToolRegistryBuilder {
+    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+    specs: Vec<ConfiguredToolSpec>,
+}
+
+impl ToolRegistryBuilder {
+    pub fn register_handler(
+        &mut self,
+        name: impl Into<String>,
+        handler: Arc<dyn ToolHandler>,
+    ) {
+        let name = name.into();
+        if self.handlers
+            .insert(name.clone(), handler.clone())
+            .is_some()
+        {
+            warn!("overwriting handler for tool {name}");
+        }
+    }
+
+    pub fn build(self) -> (Vec<ConfiguredToolSpec>, ToolRegistry) {
+        let registry = ToolRegistry::new(self.handlers);
+        (self.specs, registry)
+    }
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L241-L300 */}
+
+## `ToolPayload`: Types of Tool Invocations
+
+```rust
+pub enum ToolPayload {
+    Function { arguments: Value },
+    Custom { input: Value },
+    LocalShell { params: LocalShellParams },
+    Mcp { server: String, tool: String, raw_arguments: Value },
+}
+```
+
+There are four payload types corresponding to different tool categories.
+
+- **Function**: JSON Schema-based function call
+- **LocalShell**: Shell command execution
+- **Mcp**: Tool call via an MCP server
+- **Custom**: Custom tools
+
+## Parallel Tool Execution
+
+Parallelism in tool execution is controlled by `ConfiguredToolSpec`.
+
+```rust
+#[derive(Debug, Clone)]
+pub struct ConfiguredToolSpec {
+    pub spec: ToolSpec,
+    pub supports_parallel_tool_calls: bool,
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L226-L230 */}
+
+- Tools with `supports_parallel_tool_calls: true` can run in parallel
+- **Mutating tools** (`is_mutating() == true`) are serialized by the `tool_call_gate`
+
+```rust
+if is_mutating {
+    tracing::trace!("waiting for tool gate");
+    invocation_for_tool.turn.tool_call_gate
+        .wait_ready().await;
+    tracing::trace!("tool gate released");
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L174-L178 */}
+
+This allows read-only tools (`ReadFile`, `Grep`, etc.) to execute in parallel, while file writes and shell commands run safely in sequence.
+
+## Built-in Tools
+
+Codex CLI provides the following built-in tools.
+
+| Tool Name | Function | Mutating |
+|-----------|----------|---------|
+| `local_shell` | Shell command execution | Yes |
+| `apply_patch` | Apply a file patch | Yes |
+| `read_file` | Read a file | No |
+| `list_dir` | List directory contents | No |
+| `grep` | Pattern search | No |
+| `write_file` | Write a file | Yes |
+| `view_image` | Display an image | No |
+
+## MCP (Model Context Protocol) Integration
+
+Codex CLI supports integration with external tool servers via **MCP (Model Context Protocol)**.
+
+### MCP Tool Registration
+
+Tools exposed by MCP servers are registered as `ToolKind::Mcp`.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ToolKind {
+    Function,
+    Mcp,
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L27-L31 */}
+
+### MCP Naming Convention
+
+MCP tools follow the `server_name__tool_name` naming convention. Combining the server name and tool name with a double underscore avoids name collisions.
+
+### Hooks Integration
+
+Hook processing is executed before and after tool invocations.
+
+```rust
+async fn dispatch_after_tool_use_hook(
+    dispatch: AfterToolUseHookDispatch<'_>,
+) -> Option<FunctionCallError> {
+    let tool_input = HookToolInput::from(&invocation.payload);
+    let hook_outcomes = session
+        .hooks()
+        .dispatch(HookPayload {
+            hook_event: HookEvent::AfterToolUse {
+                event: HookEventAfterToolUse {
+                    tool_name: invocation.tool_name.clone(),
+                    tool_kind: hook_tool_kind(&tool_input),
+                    tool_input,
+                    executed: dispatch.executed,
+                    success: dispatch.success,
+                    // ...
+                },
+            },
+        })
+        .await;
+    // ...
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L370-L406 */}
+
+Hook results can also abort tool execution (`FailedAbort`). This enables implementing custom guardrails in accordance with organizational security policies.

@@ -1,0 +1,147 @@
+---
+title: "Architecture Overview"
+order: 1
+description: "An overview of Codex CLI's structure, monorepo layout, SQ/EQ protocol, and Node.js-to-Rust-core connection"
+---
+
+## What Is Codex CLI?
+
+Codex CLI is an open-source AI coding agent developed by OpenAI. It runs in the terminal and autonomously generates, edits, and executes code from natural-language instructions.
+
+The defining architectural feature is a **hybrid Node.js frontend + Rust backend** design. Node.js (npm) handles the user interface and distribution, while Rust implements the performance-critical agent core, sandbox, and protocol processing.
+
+## Monorepo Structure
+
+The Codex CLI repository is organized as follows.
+
+```
+codex/
+├── codex-cli/          # Node.js launcher (npm package)
+│   └── bin/codex.js    # Entry point
+├── codex-rs/           # Rust workspace
+│   ├── protocol/       # SQ/EQ protocol definitions
+│   ├── core/           # Agent core (loop · tools · sandbox)
+│   ├── linux-sandbox/  # Linux sandbox (bubblewrap + seccomp)
+│   ├── config/         # Config types & constraint system
+│   ├── execpolicy/     # Starlark-based execution policy
+│   └── ...
+└── sdk/                # SDKs & libraries
+```
+
+## Node.js Launcher
+
+`codex-cli/bin/codex.js` is the npm-distributed entry point. It resolves the platform-specific native binary and spawns the Rust backend as a child process.
+
+```typescript
+// codex-cli/bin/codex.js
+const PLATFORM_PACKAGE_BY_TARGET = {
+  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
+  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
+  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
+  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
+  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
+  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64",
+};
+```
+{/* source: codex-cli/bin/codex.js:L15-L22 */}
+
+The launcher locates the Rust binary from the platform-specific npm package and starts it via `child_process.spawn`. Communication between the frontend and backend uses the SQ/EQ protocol.
+
+## SQ/EQ Protocol
+
+Frontend-to-backend communication in Codex CLI is designed around the **SQ (Submission Queue) / EQ (Event Queue)** pattern — a bidirectional asynchronous message-passing model.
+
+- **SQ (Submission Queue)**: Requests sent from the user side to the agent
+- **EQ (Event Queue)**: Event notifications sent from the agent back to the user side
+
+### Submission (SQ) Definition
+
+```rust
+/// Submission Queue Entry - requests from user
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct Submission {
+    /// Unique id for this Submission to correlate with Events
+    pub id: String,
+    /// Payload
+    pub op: Op,
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L78-L85 */}
+
+### Key Op Variants
+
+```rust
+/// Submission operation
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Op {
+    /// Abort current task.
+    Interrupt,
+
+    /// User input with full turn context.
+    UserTurn {
+        items: Vec<UserInput>,
+        cwd: PathBuf,
+        approval_policy: AskForApproval,
+        sandbox_policy: SandboxPolicy,
+        model: String,
+        // ...
+    },
+
+    /// Approve a command execution
+    ExecApproval {
+        id: String,
+        decision: ReviewDecision,
+    },
+
+    /// Request the agent to summarize the conversation context.
+    Compact,
+
+    // ...
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L159-L444 */}
+
+`UserTurn` is the most important operation. In addition to user input, it carries per-turn context such as `cwd`, `approval_policy`, `sandbox_policy`, and `model`, making each turn a self-contained unit of execution.
+
+### Key EventMsg (EQ) Variants
+
+```rust
+pub enum EventMsg {
+    /// Agent has started a turn.
+    TurnStarted(TurnStartedEvent),
+
+    /// Agent has completed all actions.
+    TurnComplete(TurnCompleteEvent),
+
+    /// Agent text output message
+    AgentMessage(AgentMessageEvent),
+
+    /// Agent text output delta message
+    AgentMessageDelta(AgentMessageDeltaEvent),
+
+    /// Notification that the server is about to execute a command.
+    ExecCommandBegin(ExecCommandBeginEvent),
+
+    /// Incremental chunk of output from a running command.
+    ExecCommandOutputDelta(ExecCommandOutputDeltaEvent),
+
+    /// Approval request for command execution
+    ExecApprovalRequest(ExecApprovalRequestEvent),
+
+    /// Conversation history was compacted.
+    ContextCompacted(ContextCompactedEvent),
+
+    // ...
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L997-L1116 */}
+
+### Design Intent of the SQ/EQ Pattern
+
+This pattern offers several advantages.
+
+1. **Frontend agnosticism**: The Rust core has no dependency on any specific UI. Any frontend — TUI, web UI, IDE plugin — can connect to the same backend.
+2. **Asynchronous processing**: User interactions and agent processing proceed asynchronously, enabling streaming output.
+3. **Type-safe boundary**: `serde` + `JsonSchema` guarantees type consistency between frontend and backend.
+4. **Per-turn self-containment**: Embedding all context in `UserTurn` makes each turn an independent unit of execution.

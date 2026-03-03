@@ -1,0 +1,172 @@
+---
+title: "Agent Loop"
+order: 2
+description: "The run_turn function flow, prompt construction, API streaming, tool execution, and context management"
+---
+
+## Overview of the Agent Loop
+
+The Codex CLI agent operates in units called "turns." Each turn repeats the following cycle.
+
+1. **Prompt construction**: Assembles user input, context, and tool definitions
+2. **API call**: Sends a streaming request to the OpenAI Responses API
+3. **Response processing**: Handles streamed text and tool calls as they arrive
+4. **Tool execution**: Executes tools requested by the model (shell commands, file operations, etc.)
+5. **Context check**: Inspects token usage and compacts if necessary
+6. **Loop continuation**: Returns tool results to the model and fetches the next response
+
+## The `run_turn` Function
+
+`run_turn` is the entry point of the agent loop.
+
+```rust
+pub(crate) async fn run_turn(
+    sess: Arc<Session>,
+    turn_context: Arc<TurnContext>,
+    input: Vec<UserInput>,
+    prewarmed_client_session: Option<ModelClientSession>,
+    cancellation_token: CancellationToken,
+) -> Option<String> {
+    if input.is_empty() {
+        return None;
+    }
+
+    let model_info = turn_context.model_info.clone();
+    let auto_compact_limit = model_info
+        .auto_compact_token_limit()
+        .unwrap_or(i64::MAX);
+
+    let event = EventMsg::TurnStarted(TurnStartedEvent {
+        turn_id: turn_context.sub_id.clone(),
+        model_context_window: turn_context.model_context_window(),
+        collaboration_mode_kind: turn_context.collaboration_mode.mode,
+    });
+    sess.send_event(&turn_context, event).await;
+
+    // Pre-sampling compaction check
+    if run_pre_sampling_compact(&sess, &turn_context)
+        .await
+        .is_err()
+    {
+        error!("Failed to run pre-sampling compact");
+        return None;
+    }
+    // ...
+}
+```
+{/* source: codex-rs/core/src/codex.rs:L4832-L4862 */}
+
+### Processing Flow Details
+
+`run_turn` proceeds in the following order.
+
+1. **Send TurnStarted event**: Notifies the frontend that a turn has begun
+2. **Pre-sampling compaction**: If near the token limit, compresses conversation history before making the API call
+3. **Skill resolution**: Resolves dependencies for any mentioned skills (e.g., `/commit`)
+4. **MCP dependency installation**: Verifies required MCP server dependencies
+5. **Record user input**: Writes the user's input to the conversation history
+6. **API streaming loop**: Begins the interaction with the model
+
+## ModelClient: The API Client
+
+`ModelClient` is a session-scoped API client responsible for authentication, provider selection, and WebSocket management.
+
+```rust
+/// A session-scoped client for model-provider API calls.
+///
+/// WebSocket fallback is session-scoped: once a turn activates the
+/// HTTP fallback, subsequent turns will also use HTTP for the
+/// remainder of the session.
+#[derive(Debug, Clone)]
+pub struct ModelClient {
+    state: Arc<ModelClientState>,
+}
+
+/// A turn-scoped streaming session created from a ModelClient.
+///
+/// The session establishes a Responses WebSocket connection lazily
+/// and reuses it across multiple requests within the turn.
+pub struct ModelClientSession {
+    client: ModelClient,
+    websocket_session: WebsocketSession,
+    // ...
+}
+```
+{/* source: codex-rs/core/src/client.rs:L173-L194 */}
+
+### WebSocket-First / SSE Fallback
+
+Codex CLI **prefers WebSocket** for API communication and **falls back to SSE (Server-Sent Events)** if the connection fails.
+
+```rust
+pub fn ws_version_from_features(config: &Config)
+    -> Option<ResponsesWebsocketVersion>
+{
+    match (
+        config.features.enabled(Feature::ResponsesWebsockets),
+        config.features.enabled(Feature::ResponsesWebsocketsV2),
+    ) {
+        (_, true) => Some(ResponsesWebsocketVersion::V2),
+        (true, false) => Some(ResponsesWebsocketVersion::V1),
+        (false, false) => None,
+    }
+}
+```
+{/* source: codex-rs/core/src/client.rs:L117-L130 */}
+
+- **WebSocket V2**: The latest protocol. Supports pre-warming and incremental requests via `response.create` + `response.append`
+- **WebSocket V1**: Basic WebSocket streaming
+- **SSE fallback**: For environments where WebSocket is unavailable
+
+WebSocket pre-warming establishes a connection in advance with `generate=false`, reusing the same connection for subsequent requests. This reduces latency.
+
+## Context Compaction
+
+As conversations grow longer and approach the token limit, Codex CLI implements **automatic compaction**.
+
+```rust
+pub(crate) async fn run_inline_auto_compact_task(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+) -> Result<()> { /* ... */ }
+
+pub(crate) fn should_use_remote_compact_task(
+    provider: &ModelProviderInfo,
+) -> bool { /* ... */ }
+
+pub(crate) fn build_compacted_history(
+    // ...
+) -> Vec<ResponseItem> { /* ... */ }
+```
+{/* source: codex-rs/core/src/compact.rs:L54-L323 */}
+
+Two compaction strategies are available.
+
+1. **Inline compaction**: Summarizes the conversation using the same model
+2. **Remote compaction**: Delegates summarization to a separate endpoint
+
+### Compaction Trigger Condition
+
+```rust
+let auto_compact_limit = model_info
+    .auto_compact_token_limit()
+    .unwrap_or(i64::MAX);
+```
+{/* source: codex-rs/core/src/codex.rs:L4844 */}
+
+Compaction runs automatically when the model's `auto_compact_token_limit` is exceeded. This efficiently utilizes the context window while preserving important information.
+
+## Turn Lifecycle Events
+
+As a turn progresses, the following events are sent to the frontend in sequence.
+
+| Event | Timing | Content |
+|-------|--------|---------|
+| `TurnStarted` | Turn begins | Model, context window size |
+| `AgentMessageDelta` | While streaming | Incremental text output |
+| `ExecCommandBegin` | Before tool execution | Command about to run |
+| `ExecApprovalRequest` | When approval needed | Requests user approval |
+| `ExecCommandOutputDelta` | While command runs | Incremental command output |
+| `ExecCommandEnd` | After command completes | Execution result |
+| `TokenCount` | Turn ends | Updated token usage |
+| `TurnComplete` | Turn completes | Final status |

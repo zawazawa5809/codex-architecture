@@ -1,0 +1,126 @@
+---
+title: "Tool Comparison"
+order: 7
+description: "A public-information comparison of Codex CLI and Claude Code, shared design patterns, and common challenges in AI coding agents"
+---
+
+## Comparing AI Coding Agents
+
+Codex CLI and Claude Code are both prominent implementations of AI coding agents. Using publicly available information, this section compares their design approaches.
+
+## Basic Architecture Comparison
+
+| Item | Codex CLI | Claude Code |
+|------|-----------|-------------|
+| **Language** | Rust (core) + Node.js (launcher) | TypeScript (Node.js) |
+| **Model** | OpenAI (GPT-4o, o4-mini, etc.) | Anthropic (Claude) |
+| **Distribution** | npm package + native binary | npm package |
+| **Open Source** | Yes (Apache 2.0) | No (closed source) |
+| **Protocol** | SQ/EQ pattern | Internal protocol |
+
+## Shared Design Patterns
+
+Both tools adopt similar approaches to the structural challenges of AI agents.
+
+### 1. Tool Orchestration
+
+Both **Codex CLI** and **Claude Code** implement a mechanism for orchestrating tool calls requested by the model.
+
+- The model emits a tool call
+- The agent executes the tool
+- The result is returned to the model to generate the next response
+
+This loop is the common architecture underlying AI coding agents.
+
+### 2. Sandbox-Based Safety
+
+Both tools implement process-level sandboxing.
+
+**Codex CLI**:
+- Linux: bubblewrap + Landlock + seccomp
+- macOS: Seatbelt (sandbox-exec)
+- Windows: Restricted token
+
+**Claude Code**:
+- Linux/macOS: OS-level sandboxing
+- Filesystem access control
+
+### 3. Approval Mechanism
+
+Both tools share the principle of never executing dangerous operations without user approval.
+
+**Codex CLI**:
+- Graduated control via `AskForApproval` enum
+- Rule-based approval via ExecPolicy DSL
+- Approval caching
+
+**Claude Code**:
+- Permission modes (Ask / Auto-approve / Deny)
+- Per-tool permission control
+- Configuration via `.claude/settings.json`
+
+### 4. Context Management
+
+Managing token limits in long conversations is a shared challenge addressed by both tools.
+
+**Codex CLI**:
+- Automatic compaction (`compact.rs`)
+- Real-time token usage tracking
+- Pre-sampling compaction
+
+**Claude Code**:
+- Context compression via automatic summarization
+- Context window usage display
+
+### 5. Layered Configuration
+
+Both tools support project-specific configuration.
+
+**Codex CLI**:
+- `~/.codex/config.toml` (global)
+- `.codex/config.toml` (project)
+
+**Claude Code**:
+- `~/.claude/settings.json` (global)
+- `.claude/settings.json` (project)
+- `CLAUDE.md` (project instructions)
+
+## Differing Approaches
+
+### Frontend/Backend Separation
+
+**Codex CLI** cleanly separates frontend and backend via the SQ/EQ protocol. This allows multiple UI frontends (TUI, web, IDE) to connect to the same backend.
+
+**Claude Code** operates as a single process with tightly coupled TUI and processing logic.
+
+### Execution Policy
+
+**Codex CLI** defines execution policies using a Starlark-based DSL. This is flexible and well-suited for enforcing organizational policies.
+
+**Claude Code** focuses on per-tool permission settings and does not include a rule-based policy engine.
+
+### MCP (Model Context Protocol)
+
+Both tools support MCP, but differ in integration depth.
+
+**Codex CLI**: MCP tools are registered in the same `ToolRegistry` as native tools and are subject to the same approval and sandbox controls.
+
+**Claude Code**: MCP servers are connected as plugins and exposed as tools.
+
+## Common Design Challenges in AI Coding Agents
+
+### Safety vs. Convenience Trade-off
+
+Requiring user approval for every operation reduces productivity, while auto-approving everything increases security risk. Both tools address this challenge through a "graduated approval" model.
+
+### Context Window Constraints
+
+LLMs have a finite context window. For long-running work on large projects, a mechanism is needed to efficiently compress past context while retaining important information.
+
+### Controlling Tool Output
+
+Shell command output is unpredictable, and large outputs can overwhelm the context. Strategies for truncating and summarizing output are critical.
+
+### Cross-Platform Support
+
+The sandboxing technologies available on Linux, macOS, and Windows differ significantly, requiring a platform abstraction layer.

@@ -1,0 +1,223 @@
+---
+title: "Design Pattern Takeaways"
+order: 8
+description: "Six reusable design patterns extracted from Codex CLI, with generalizable application examples"
+---
+
+## Reusable Design Patterns
+
+This section presents six design patterns extracted from the Codex CLI architecture. These patterns are not limited to AI agents — they are applicable across a wide range of software systems.
+
+## 1. SQ/EQ Pattern (Frontend/Backend Separation Protocol)
+
+### Pattern Overview
+
+A pattern that separates user-side operation requests (**Submission Queue**) from backend event notifications (**Event Queue**) as asynchronous messages.
+
+```rust
+// Submission: user → backend
+pub struct Submission {
+    pub id: String,
+    pub op: Op,
+}
+
+// Event: backend → user
+pub enum EventMsg {
+    TurnStarted(TurnStartedEvent),
+    AgentMessageDelta(AgentMessageDeltaEvent),
+    ExecApprovalRequest(ExecApprovalRequestEvent),
+    TurnComplete(TurnCompleteEvent),
+    // ...
+}
+```
+
+### Design Highlights
+
+- Assign a unique ID to each Submission, correlated with corresponding Events
+- Define operation types in a type-safe manner via Op enum variants
+- `serde` + `JsonSchema` guarantees type consistency across language boundaries
+
+### General Applications
+
+- **Microservice communication**: Decouple services by separating requests and events
+- **IDE plugin architecture**: Bidirectional communication à la Language Server Protocol (LSP)
+- **Real-time collaboration**: Separate the sending of operations from the receiving of events
+
+## 2. Trait-based Tool Registration (Extensible Plugin System)
+
+### Pattern Overview
+
+A pattern that defines a trait to formalize plugin contracts and dispatches via a HashMap-based registry.
+
+```rust
+#[async_trait]
+pub trait ToolHandler: Send + Sync {
+    fn kind(&self) -> ToolKind;
+    async fn is_mutating(&self, invocation: &ToolInvocation) -> bool;
+    async fn handle(&self, invocation: ToolInvocation)
+        -> Result<ToolOutput, FunctionCallError>;
+}
+
+pub struct ToolRegistry {
+    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+}
+```
+
+### Design Highlights
+
+- `Send + Sync` bounds ensure safety in async and concurrent environments
+- `Arc<dyn ToolHandler>` shares ownership and dispatches at runtime
+- A Builder pattern centralizes validation at registration time
+
+### General Applications
+
+- **Web framework middleware**: Dynamic handler registration
+- **Game engine component systems**: Dynamically attach components to entities
+- **CI/CD pipeline step definitions**: Abstract each step behind a trait
+
+## 3. Defense-in-Depth Sandbox (Layered Defense)
+
+### Pattern Overview
+
+A pattern that combines multiple independent defense layers rather than relying on a single security mechanism.
+
+```
+┌───────────────────────────────────────┐
+│ Layer 1: Approval System              │
+├───────────────────────────────────────┤
+│ Layer 2: Execution Policy (ExecPolicy)│
+├───────────────────────────────────────┤
+│ Layer 3: FS Isolation (bwrap/Seatbelt)│
+├───────────────────────────────────────┤
+│ Layer 4: syscall Restrictions (seccomp│
+├───────────────────────────────────────┤
+│ Layer 5: Network Control (Proxy)      │
+├───────────────────────────────────────┤
+│ Layer 6: Process Hardening            │
+└───────────────────────────────────────┘
+```
+
+### Design Highlights
+
+- Each layer functions independently; if one layer is breached, the others maintain defense
+- Platform abstraction (`SandboxType` enum) handles cross-platform support
+- `WritableRoot` + `read_only_subpaths` prevents agent privilege escalation
+
+### General Applications
+
+- **Multi-tenant SaaS**: Data isolation between tenants
+- **Container orchestration**: Pod security policies
+- **Browser extensions**: Content script permission restrictions
+
+## 4. Context Window Management
+
+### Pattern Overview
+
+A pattern that efficiently manages finite resources (token counts) by automatically compressing and summarizing unnecessary information.
+
+```rust
+// Auto-compact when token usage exceeds the threshold
+let auto_compact_limit = model_info
+    .auto_compact_token_limit()
+    .unwrap_or(i64::MAX);
+
+// Select compaction strategy
+pub(crate) fn should_use_remote_compact_task(
+    provider: &ModelProviderInfo,
+) -> bool { /* ... */ }
+```
+
+### Design Highlights
+
+- Threshold-based automatic triggering
+- Two compaction strategies: inline and remote
+- Pre-sampling compaction reserves space before API calls
+
+### General Applications
+
+- **Log management**: Log rotation and summarization
+- **Chat applications**: Compressing message history
+- **Cache systems**: LRU + summary-based eviction
+
+## 5. Approval Escalation (Graduated Approval)
+
+### Pattern Overview
+
+A pattern that varies the approval granularity in stages based on the risk level of an operation.
+
+```rust
+// 1. Automatic determination based on policy
+match requirement {
+    ExecApprovalRequirement::Skip { .. } => { /* auto-approve */ }
+    ExecApprovalRequirement::Forbidden { .. } => { /* reject */ }
+    ExecApprovalRequirement::NeedsApproval { .. } => {
+        // 2. Request user approval
+    }
+}
+
+// 3. Escalation on sandbox failure
+// Offer to retry without sandbox
+```
+
+### Design Highlights
+
+- Three approval levels (auto → confirm → reject)
+- Automatic escalation on sandbox failure
+- Codifying approval results (suggest auto-approval for future occurrences)
+
+### General Applications
+
+- **Financial systems**: Approval flow based on transaction amount
+- **DevOps**: Environment-based approval (dev is automatic, prod is manual)
+- **Access control**: Multi-factor authentication based on operation risk
+
+## 6. Process Hardening
+
+### Pattern Overview
+
+A pattern that applies OS-level security mechanisms when spawning child processes to minimize their privileges.
+
+```rust
+// Linux
+fn set_no_new_privs() -> Result<()> {
+    unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) };
+    Ok(())
+}
+
+// bubblewrap flags
+args.push("--new-session".to_string());  // Signal isolation
+args.push("--die-with-parent".to_string());  // Prevent orphans
+args.push("--unshare-pid".to_string());  // PID isolation
+args.push("--unshare-net".to_string());  // Network isolation
+
+// macOS
+const MACOS_PATH_TO_SEATBELT_EXECUTABLE: &str =
+    "/usr/bin/sandbox-exec";  // Prevent PATH injection
+```
+
+### Design Highlights
+
+- `PR_SET_NO_NEW_PRIVS` makes privilege escalation impossible
+- `--die-with-parent` prevents zombie processes
+- Only trusted paths are used (e.g., `/usr/bin/sandbox-exec`)
+
+### General Applications
+
+- **Container runtimes**: OCI container security profiles
+- **Web browsers**: Renderer process sandboxing
+- **CI runners**: Isolated build job execution
+
+## Summary
+
+These six patterns are extracted from the concrete implementation of Codex CLI, but their applicability extends far beyond AI coding agents. They are particularly valuable in the following contexts.
+
+| Pattern | Primary Use Cases |
+|---------|------------------|
+| SQ/EQ | Async communication, UI separation |
+| Trait-based Registration | Plugin systems |
+| Defense-in-Depth | Security design |
+| Context Management | Information management under resource constraints |
+| Approval Escalation | Risk-based approval flows |
+| Process Hardening | Process security |
+
+In software design, learning design patterns from existing open-source projects and applying them to your own work yields significant benefits in both quality and productivity.
