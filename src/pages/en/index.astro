@@ -1,8 +1,8 @@
 ---
-import BaseLayout from "../layouts/BaseLayout.astro";
-import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { useTranslation, getLocalePath, type Lang } from "../../i18n/utils";
 
-const lang = (Astro.currentLocale ?? "ja") as Lang;
+const lang = "en" as Lang;
 const t = useTranslation(lang);
 ---
 

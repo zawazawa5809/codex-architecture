@@ -45,11 +45,50 @@ const sections = [
       }
     </div>
 
-    <LanguageToggle client:load lang={lang} />
+    <div class="flex items-center gap-2">
+      <LanguageToggle client:load lang={lang} />
+
+      {/* Hamburger button (mobile only) */}
+      <button
+        id="mobile-menu-btn"
+        class="flex items-center justify-center rounded-md p-2 text-[var(--color-text-secondary)] transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)] lg:hidden"
+        aria-label="Toggle menu"
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+      >
+        <svg id="hamburger-icon" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <svg id="close-icon" class="hidden h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  {/* Mobile menu panel */}
+  <div
+    id="mobile-menu"
+    class="hidden border-t border-[var(--color-border)] bg-[var(--color-bg-primary)]/95 backdrop-blur-xl lg:hidden"
+  >
+    <div class="space-y-1 px-4 py-3">
+      {
+        sections.map((section) => (
+          <a
+            href={`#${section.id}`}
+            class="mobile-nav-link nav-link block rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]"
+            data-section={section.id}
+          >
+            {section.label}
+          </a>
+        ))
+      }
+    </div>
   </div>
 </nav>
 
 <script>
+  // --- Scroll spy ---
   const navLinks = document.querySelectorAll<HTMLAnchorElement>(".nav-link");
   const sections = document.querySelectorAll<HTMLElement>("section[id]");
 
@@ -74,4 +113,45 @@ const sections = [
   );
 
   sections.forEach((section) => observer.observe(section));
+
+  // --- Mobile menu ---
+  const menuBtn = document.getElementById("mobile-menu-btn");
+  const menu = document.getElementById("mobile-menu");
+  const hamburgerIcon = document.getElementById("hamburger-icon");
+  const closeIcon = document.getElementById("close-icon");
+  const mobileLinks = document.querySelectorAll<HTMLAnchorElement>(".mobile-nav-link");
+
+  function toggleMenu() {
+    const isOpen = menu?.classList.toggle("hidden") === false;
+    menuBtn?.setAttribute("aria-expanded", String(isOpen));
+    hamburgerIcon?.classList.toggle("hidden", isOpen);
+    closeIcon?.classList.toggle("hidden", !isOpen);
+  }
+
+  function closeMenu() {
+    menu?.classList.add("hidden");
+    menuBtn?.setAttribute("aria-expanded", "false");
+    hamburgerIcon?.classList.remove("hidden");
+    closeIcon?.classList.add("hidden");
+  }
+
+  menuBtn?.addEventListener("click", toggleMenu);
+
+  // Close on link click
+  mobileLinks.forEach((link) => link.addEventListener("click", closeMenu));
+
+  // Close on Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !menu?.classList.contains("hidden")) {
+      closeMenu();
+    }
+  });
+
+  // Close on outside click
+  document.addEventListener("click", (e) => {
+    const nav = document.getElementById("main-nav");
+    if (nav && !nav.contains(e.target as Node) && !menu?.classList.contains("hidden")) {
+      closeMenu();
+    }
+  });
 </script>

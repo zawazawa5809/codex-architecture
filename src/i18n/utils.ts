@@ -31,6 +31,20 @@ const translations = {
     "card.designDesc": "SQ/EQ, コンテキスト管理, ツールオーケストレーションは汎用設計パターン",
     "card.builder": "From User to Builder",
     "card.builderDesc": "内部を理解すれば自分のエージェントを構築できる",
+    "hero.cta": "解説を読む",
+    "footer.licenseTitle": "ライセンス",
+    "footer.licenseBody":
+      "Codex CLI のコードスニペットは Apache License 2.0 に基づき使用しています。本サイトは独立した教育リソースであり、OpenAI との提携・推奨関係はありません。",
+    "footer.noticeBody":
+      "解析対象コードの一部には Ratatui および Meriyah のコンポーネントが含まれています。詳細な帰属表示は NOTICE ファイルをご覧ください。",
+    "footer.copyright": "教育目的のみ",
+    "index.status.available": "公開中",
+    "index.status.comingSoon": "準備中",
+    "index.codexDesc":
+      "OpenAI のオープンソース AI コーディングエージェント。Rust + TypeScript ハイブリッドアーキテクチャ、マルチプラットフォームサンドボックス、SQ/EQ プロトコルを深掘り。",
+    "index.cta.read": "解説を読む",
+    "index.claudeDesc":
+      "Anthropic の CLI ベース AI コーディングツール。ソース公開のアーキテクチャを解析予定。",
   },
   en: {
     "site.title": "AI Agent Architecture Atlas",
@@ -55,6 +69,20 @@ const translations = {
     "card.designDesc": "SQ/EQ, context management, tool orchestration are universal design patterns",
     "card.builder": "From User to Builder",
     "card.builderDesc": "Understanding internals enables building your own agents",
+    "hero.cta": "Read the Guide",
+    "footer.licenseTitle": "License",
+    "footer.licenseBody":
+      "Code snippets from Codex CLI are used under the Apache License 2.0. This site is an independent educational resource and is not affiliated with or endorsed by OpenAI.",
+    "footer.noticeBody":
+      "Portions of analyzed code include components from Ratatui and Meriyah, used under their respective licenses. See the NOTICE file for full attribution.",
+    "footer.copyright": "Educational use only",
+    "index.status.available": "Available",
+    "index.status.comingSoon": "Coming Soon",
+    "index.codexDesc":
+      "OpenAI's open-source AI coding agent. Deep dive into the Rust + TypeScript hybrid architecture, multi-platform sandbox, and SQ/EQ protocol.",
+    "index.cta.read": "Read the guide",
+    "index.claudeDesc":
+      "Anthropic's CLI-based AI coding tool. Architecture analysis of the open-source release coming soon.",
   },
 } as const;
 

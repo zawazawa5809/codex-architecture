@@ -1,28 +1,18 @@
 ---
-import BaseLayout from "../layouts/BaseLayout.astro";
-import Hero from "../components/Hero.astro";
-import ComparisonTable from "../components/ComparisonTable.astro";
-import { useTranslation, type Lang } from "../i18n/utils";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import Hero from "../../components/Hero.astro";
+import ComparisonTable from "../../components/ComparisonTable.astro";
+import { useTranslation, getLocalePath, type Lang } from "../../i18n/utils";
 
-// Diagram components (React Islands)
-import ArchitectureOverview from "../diagrams/ArchitectureOverview.tsx";
-import AgentLoop from "../diagrams/AgentLoop.tsx";
-import ToolSystem from "../diagrams/ToolSystem.tsx";
-import SandboxFlow from "../diagrams/SandboxFlow.tsx";
-import ApprovalFlow from "../diagrams/ApprovalFlow.tsx";
-import SqEqAnimation from "../diagrams/SqEqAnimation.tsx";
+// Diagram components (React Islands) — no translated text, usable as-is
+import ArchitectureOverview from "../../diagrams/ArchitectureOverview.tsx";
+import AgentLoop from "../../diagrams/AgentLoop.tsx";
+import ToolSystem from "../../diagrams/ToolSystem.tsx";
+import SandboxFlow from "../../diagrams/SandboxFlow.tsx";
+import ApprovalFlow from "../../diagrams/ApprovalFlow.tsx";
+import SqEqAnimation from "../../diagrams/SqEqAnimation.tsx";
 
-// MDX Content
-import Overview from "../content/ja/codex/01-overview.mdx";
-import AgentLoopContent from "../content/ja/codex/02-agent-loop.mdx";
-import ToolSystemContent from "../content/ja/codex/03-tool-system.mdx";
-import SandboxContent from "../content/ja/codex/04-sandbox.mdx";
-import ApprovalContent from "../content/ja/codex/05-approval.mdx";
-import ConfigContent from "../content/ja/codex/06-config.mdx";
-import ComparisonContent from "../content/ja/codex/07-comparison.mdx";
-import TakeawaysContent from "../content/ja/codex/08-takeaways.mdx";
-
-const lang = (Astro.currentLocale ?? "ja") as Lang;
+const lang = "en" as Lang;
 const t = useTranslation(lang);
 
 const whyCards = [
@@ -49,6 +39,32 @@ const whyCards = [
 
 <BaseLayout title={`Codex CLI — ${t("site.title")}`} description={t("site.description")} lang={lang}>
   <Hero lang={lang} />
+
+  <!-- Translation in Progress Banner -->
+  <div class="border-b border-[var(--color-border)] bg-[var(--color-accent-indigo)]/5 py-4">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="flex flex-col items-start gap-3 rounded-xl border border-[var(--color-accent-indigo)]/30 bg-[var(--color-accent-indigo)]/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-center gap-3">
+          <svg class="h-5 w-5 shrink-0 text-[var(--color-accent-indigo)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <p class="text-sm text-[var(--color-text-secondary)]">
+            <span class="font-semibold text-[var(--color-text-primary)]">Translation in progress.</span>
+            {" "}The detailed written content for each section is currently only available in Japanese. The diagrams below are language-independent.
+          </p>
+        </div>
+        <a
+          href="/codex"
+          class="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-accent-indigo)]/40 px-3 py-1.5 text-xs font-medium text-[var(--color-accent-indigo)] transition-all hover:bg-[var(--color-accent-indigo)]/10"
+        >
+          Read in Japanese
+          <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
 
   <!-- Why Study Section -->
   <section id="why-study" class="py-20">
@@ -82,7 +98,7 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">1</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">アーキテクチャ概要</h2>
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Architecture Overview</h2>
       </div>
 
       <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
@@ -92,14 +108,10 @@ const whyCards = [
       </div>
 
       <div class="mb-8 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-        <h3 class="mb-4 text-lg font-semibold text-[var(--color-accent-cyan)]">SQ/EQ メッセージフロー</h3>
+        <h3 class="mb-4 text-lg font-semibold text-[var(--color-accent-cyan)]">SQ/EQ Message Flow</h3>
         <div class="min-w-[600px]">
           <SqEqAnimation client:visible />
         </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <Overview />
       </div>
     </div>
   </section>
@@ -109,17 +121,13 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">2</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">エージェントループ</h2>
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Agent Loop</h2>
       </div>
 
       <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
         <div class="min-w-[600px]">
           <AgentLoop client:visible />
         </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <AgentLoopContent />
       </div>
     </div>
   </section>
@@ -129,7 +137,7 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">3</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">ツールシステム</h2>
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Tool System</h2>
       </div>
 
       <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
@@ -137,30 +145,22 @@ const whyCards = [
           <ToolSystem client:visible />
         </div>
       </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ToolSystemContent />
-      </div>
     </div>
   </section>
 
-  <!-- Section 4: Sandbox Security (★MAIN) -->
+  <!-- Section 4: Sandbox Security -->
   <section id="sandbox" class="border-t border-[var(--color-border)] py-20">
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-rose)]/20 font-mono text-sm text-[var(--color-accent-rose)]">4</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">サンドボックスセキュリティ</h2>
-        <span class="rounded-full bg-[var(--color-accent-rose)]/10 px-3 py-1 text-xs text-[var(--color-accent-rose)]">メインコンテンツ</span>
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Sandbox Security</h2>
+        <span class="rounded-full bg-[var(--color-accent-rose)]/10 px-3 py-1 text-xs text-[var(--color-accent-rose)]">Core Content</span>
       </div>
 
       <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-accent-rose)]/20 bg-white/[0.02] p-6">
         <div class="min-w-[600px]">
           <SandboxFlow client:visible />
         </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <SandboxContent />
       </div>
     </div>
   </section>
@@ -170,17 +170,13 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">5</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">承認システム</h2>
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Approval System</h2>
       </div>
 
       <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
         <div class="min-w-[600px]">
           <ApprovalFlow client:visible />
         </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ApprovalContent />
       </div>
     </div>
   </section>
@@ -190,11 +186,7 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">6</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">設定システム</h2>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ConfigContent />
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Configuration System</h2>
       </div>
     </div>
   </section>
@@ -204,15 +196,11 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">7</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">ツール比較</h2>
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Tool Comparison</h2>
       </div>
 
       <div class="mb-10">
         <ComparisonTable lang={lang} />
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ComparisonContent />
       </div>
     </div>
   </section>
@@ -222,11 +210,7 @@ const whyCards = [
     <div class="mx-auto max-w-6xl px-4">
       <div class="mb-8 flex items-center gap-3">
         <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-emerald)]/20 font-mono text-sm text-[var(--color-accent-emerald)]">8</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">設計パターンまとめ</h2>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <TakeawaysContent />
+        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Design Pattern Takeaways</h2>
       </div>
     </div>
   </section>
@@ -234,10 +218,10 @@ const whyCards = [
   <!-- References & License -->
   <section id="references" class="border-t border-[var(--color-border)] py-20">
     <div class="mx-auto max-w-4xl px-4">
-      <h2 class="mb-8 text-2xl font-bold text-[var(--color-text-primary)]">参考資料 & ライセンス</h2>
+      <h2 class="mb-8 text-2xl font-bold text-[var(--color-text-primary)]">References & License</h2>
       <div class="grid gap-6 md:grid-cols-2">
         <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">リンク集</h3>
+          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">Links</h3>
           <ul class="space-y-2 text-sm text-[var(--color-text-secondary)]">
             <li>
               <a href="https://github.com/openai/codex" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
@@ -257,14 +241,12 @@ const whyCards = [
           </ul>
         </div>
         <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">ライセンス表記</h3>
+          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">License Notice</h3>
           <p class="text-sm leading-relaxed text-[var(--color-text-secondary)]">
-            本サイトで引用するコードスニペットは OpenAI Codex CLI リポジトリから取得したもので、
-            Apache License 2.0 に基づき使用しています。「OpenAI」「Codex」は各社の商標であり、
-            本サイトは独立した教育リソースです。
+            {t("footer.license")}. Code snippets are sourced from the OpenAI Codex CLI repository and used under the Apache License 2.0. "OpenAI" and "Codex" are trademarks of their respective owners. This site is an independent educational resource.
           </p>
           <a href="/NOTICE" class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
-            NOTICE ファイルを表示 →
+            View NOTICE file →
           </a>
         </div>
       </div>

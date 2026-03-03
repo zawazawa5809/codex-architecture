@@ -22,34 +22,22 @@ const t = useTranslation(lang);
       </div>
 
       <div>
-        <h3 class="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">License</h3>
+        <h3 class="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">{t("footer.licenseTitle")}</h3>
         <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
-          Code snippets from Codex CLI are used under the
-          <a
-            href="https://www.apache.org/licenses/LICENSE-2.0"
-            class="text-[var(--color-accent-cyan)] hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Apache License 2.0
-          </a>. This site is an independent educational resource and is not affiliated with or
-          endorsed by OpenAI.
+          {t("footer.licenseBody")}
         </p>
       </div>
 
       <div>
         <h3 class="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">NOTICE</h3>
         <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
-          Portions of analyzed code include components from Ratatui and Meriyah, used under their
-          respective licenses. See the
-          <a href="/NOTICE" class="text-[var(--color-accent-cyan)] hover:underline">NOTICE</a> file
-          for full attribution.
+          {t("footer.noticeBody")}
         </p>
       </div>
     </div>
 
     <div class="mt-8 border-t border-[var(--color-border)] pt-6 text-center text-xs text-[var(--color-text-muted)]">
-      &copy; {new Date().getFullYear()} AI Agent Architecture Atlas. Educational use only.
+      &copy; {new Date().getFullYear()} AI Agent Architecture Atlas. {t("footer.copyright")}.
     </div>
   </div>
 </footer>
