@@ -16,11 +16,10 @@ for (const { path, title } of pages) {
       }
     });
 
-    await page.goto(path);
-    await page.waitForLoadState("networkidle");
+    const response = await page.goto(path);
 
-    // Page should not have a 404/500 status
-    expect(page.url()).toContain("localhost:4321");
+    // Page should return a successful HTTP status
+    expect(response?.ok()).toBe(true);
 
     // Verify page title
     await expect(page).toHaveTitle(title);

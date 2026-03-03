@@ -38,6 +38,8 @@ const translations = {
     "footer.noticeBody":
       "解析対象コードの一部には Ratatui および Meriyah のコンポーネントが含まれています。詳細な帰属表示は NOTICE ファイルをご覧ください。",
     "footer.copyright": "教育目的のみ",
+    "footer.viewLicense": "Apache License 2.0",
+    "footer.viewNotice": "NOTICE ファイルを見る",
     "index.status.available": "公開中",
     "index.status.comingSoon": "準備中",
     "index.codexDesc":
@@ -76,6 +78,8 @@ const translations = {
     "footer.noticeBody":
       "Portions of analyzed code include components from Ratatui and Meriyah, used under their respective licenses. See the NOTICE file for full attribution.",
     "footer.copyright": "Educational use only",
+    "footer.viewLicense": "Apache License 2.0",
+    "footer.viewNotice": "View NOTICE file",
     "index.status.available": "Available",
     "index.status.comingSoon": "Coming Soon",
     "index.codexDesc":

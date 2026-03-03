@@ -50,12 +50,14 @@ describe("useTranslation", () => {
   it("returns all new i18n keys for both languages", () => {
     const ja = useTranslation("ja");
     const en = useTranslation("en");
-    const keys = [
+    // Keys that differ between JA and EN
+    const translatedKeys = [
       "hero.cta",
       "footer.licenseTitle",
       "footer.licenseBody",
       "footer.noticeBody",
       "footer.copyright",
+      "footer.viewNotice",
       "index.status.available",
       "index.status.comingSoon",
       "index.codexDesc",
@@ -63,10 +65,17 @@ describe("useTranslation", () => {
       "index.claudeDesc",
     ] as const;
 
-    for (const key of keys) {
+    for (const key of translatedKeys) {
       expect(ja(key)).not.toBe(key); // not falling back to key name
       expect(en(key)).not.toBe(key);
       expect(ja(key)).not.toBe(en(key)); // JA and EN should differ
+    }
+
+    // Keys that are the same across languages (proper nouns / standards)
+    const sharedKeys = ["footer.viewLicense"] as const;
+    for (const key of sharedKeys) {
+      expect(ja(key)).not.toBe(key);
+      expect(en(key)).not.toBe(key);
     }
   });
 });
