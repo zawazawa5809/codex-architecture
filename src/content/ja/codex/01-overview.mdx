@@ -1,0 +1,147 @@
+---
+title: "アーキテクチャ概要"
+order: 1
+description: "Codex CLIの全体構造、モノレポ構成、SQ/EQプロトコル、Node.jsランチャーからRustコアへの接続を解説"
+---
+
+## Codex CLI とは
+
+Codex CLI は OpenAI が開発したオープンソースの AI コーディングエージェントである。ターミナル上で動作し、自然言語の指示からコードの生成・編集・実行までを自律的に行う。
+
+アーキテクチャの最大の特徴は **Node.js フロントエンド + Rust バックエンド** のハイブリッド構成にある。ユーザーインターフェースと配布を Node.js (npm) で担い、パフォーマンスクリティカルなエージェントコア・サンドボックス・プロトコル処理を Rust で実装している。
+
+## モノレポ構造
+
+Codex CLI のリポジトリは以下のような構成を持つ。
+
+```
+codex/
+├── codex-cli/          # Node.js ランチャー (npm パッケージ)
+│   └── bin/codex.js    # エントリーポイント
+├── codex-rs/           # Rust ワークスペース
+│   ├── protocol/       # SQ/EQ プロトコル定義
+│   ├── core/           # エージェントコア (ループ・ツール・サンドボックス)
+│   ├── linux-sandbox/  # Linux サンドボックス (bubblewrap + seccomp)
+│   ├── config/         # 設定型・制約システム
+│   ├── execpolicy/     # Starlark ベースの実行ポリシー
+│   └── ...
+└── sdk/                # SDK・ライブラリ
+```
+
+## Node.js ランチャー
+
+`codex-cli/bin/codex.js` は npm 配布用のエントリーポイントである。プラットフォームに応じたネイティブバイナリを解決し、子プロセスとして Rust バックエンドを起動する。
+
+```typescript
+// codex-cli/bin/codex.js
+const PLATFORM_PACKAGE_BY_TARGET = {
+  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
+  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
+  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
+  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
+  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
+  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64",
+};
+```
+{/* source: codex-cli/bin/codex.js:L15-L22 */}
+
+Node.js ランチャーはプラットフォーム固有の npm パッケージから Rust バイナリを探し、`child_process.spawn` で起動する。フロントエンドとバックエンド間の通信は SQ/EQ プロトコルで行われる。
+
+## SQ/EQ プロトコル
+
+Codex CLI のフロントエンド・バックエンド間通信は **SQ (Submission Queue) / EQ (Event Queue)** パターンで設計されている。これは非同期メッセージパッシングによる双方向通信モデルである。
+
+- **SQ (Submission Queue)**: ユーザー側からエージェントへのリクエスト
+- **EQ (Event Queue)**: エージェントからユーザー側へのイベント通知
+
+### Submission (SQ) の定義
+
+```rust
+/// Submission Queue Entry - requests from user
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+pub struct Submission {
+    /// Unique id for this Submission to correlate with Events
+    pub id: String,
+    /// Payload
+    pub op: Op,
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L78-L85 */}
+
+### Op (操作) の主要バリアント
+
+```rust
+/// Submission operation
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, JsonSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Op {
+    /// Abort current task.
+    Interrupt,
+
+    /// User input with full turn context.
+    UserTurn {
+        items: Vec<UserInput>,
+        cwd: PathBuf,
+        approval_policy: AskForApproval,
+        sandbox_policy: SandboxPolicy,
+        model: String,
+        // ...
+    },
+
+    /// Approve a command execution
+    ExecApproval {
+        id: String,
+        decision: ReviewDecision,
+    },
+
+    /// Request the agent to summarize the conversation context.
+    Compact,
+
+    // ...
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L159-L444 */}
+
+`UserTurn` は最も重要な操作で、ユーザー入力に加えて `cwd`、`approval_policy`、`sandbox_policy`、`model` などのターンごとのコンテキストを含む。これにより各ターンが自己完結した実行単位となる。
+
+### EventMsg (EQ) の主要バリアント
+
+```rust
+pub enum EventMsg {
+    /// Agent has started a turn.
+    TurnStarted(TurnStartedEvent),
+
+    /// Agent has completed all actions.
+    TurnComplete(TurnCompleteEvent),
+
+    /// Agent text output message
+    AgentMessage(AgentMessageEvent),
+
+    /// Agent text output delta message
+    AgentMessageDelta(AgentMessageDeltaEvent),
+
+    /// Notification that the server is about to execute a command.
+    ExecCommandBegin(ExecCommandBeginEvent),
+
+    /// Incremental chunk of output from a running command.
+    ExecCommandOutputDelta(ExecCommandOutputDeltaEvent),
+
+    /// Approval request for command execution
+    ExecApprovalRequest(ExecApprovalRequestEvent),
+
+    /// Conversation history was compacted.
+    ContextCompacted(ContextCompactedEvent),
+
+    // ...
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L997-L1116 */}
+
+### SQ/EQ パターンの設計意図
+
+このパターンには以下の利点がある。
+
+1. **フロントエンド非依存**: Rust コアは特定の UI に依存しない。TUI、Web UI、IDE プラグインなど任意のフロントエンドを接続できる
+2. **非同期処理**: ユーザー操作とエージェント処理が非同期に進行し、ストリーミング出力が可能
+3. **型安全な境界**: `serde` + `JsonSchema` により、フロントエンド・バックエンド間の型整合性が保証される
+4. **ターンごとの自己完結性**: `UserTurn` に全コンテキストを含めることで、各ターンが独立した実行単位となる

@@ -1,0 +1,97 @@
+/* Animation keyframes for diagram components */
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+@keyframes dash-flow-reverse {
+  to { stroke-dashoffset: 20; }
+}
+
+@keyframes message-travel-right {
+  0% { transform: translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(280px); opacity: 0; }
+}
+
+@keyframes message-travel-left {
+  0% { transform: translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(-280px); opacity: 0; }
+}
+
+@keyframes trace-pulse {
+  0%, 100% { r: 4; opacity: 0.6; }
+  50% { r: 7; opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes glow {
+  0%, 100% { filter: drop-shadow(0 0 2px currentColor); }
+  50% { filter: drop-shadow(0 0 8px currentColor); }
+}
+
+/* SVG hover transitions */
+.diagram-node {
+  transition: fill 0.2s ease, stroke 0.2s ease, opacity 0.2s ease;
+  cursor: pointer;
+}
+
+.diagram-node:hover {
+  filter: brightness(1.2);
+}
+
+.diagram-label {
+  transition: fill 0.2s ease;
+  pointer-events: none;
+  user-select: none;
+}
+
+.diagram-connection {
+  transition: stroke 0.2s ease, stroke-width 0.2s ease, opacity 0.2s ease;
+}
+
+.diagram-arrow {
+  transition: fill 0.2s ease, opacity 0.2s ease;
+}
+
+/* Animated dash lines */
+.animated-dash {
+  stroke-dasharray: 8 4;
+  animation: dash-flow 1s linear infinite;
+}
+
+.animated-dash-reverse {
+  stroke-dasharray: 8 4;
+  animation: dash-flow-reverse 1s linear infinite;
+}
+
+/* Pulsing elements */
+.pulse-dot {
+  animation: trace-pulse 1.5s ease-in-out infinite;
+}
+
+/* Message animations */
+.msg-right {
+  animation: message-travel-right 2s ease-in-out infinite;
+}
+
+.msg-left {
+  animation: message-travel-left 2s ease-in-out infinite;
+}
+
+/* Glow effect for active elements */
+.glow-active {
+  animation: glow 2s ease-in-out infinite;
+}

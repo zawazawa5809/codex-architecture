@@ -1,0 +1,260 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Hero from "../components/Hero.astro";
+import ComparisonTable from "../components/ComparisonTable.astro";
+import { useTranslation } from "../i18n/utils";
+
+// Diagram components (React Islands)
+import ArchitectureOverview from "../diagrams/ArchitectureOverview.tsx";
+import AgentLoop from "../diagrams/AgentLoop.tsx";
+import ToolSystem from "../diagrams/ToolSystem.tsx";
+import SandboxFlow from "../diagrams/SandboxFlow.tsx";
+import ApprovalFlow from "../diagrams/ApprovalFlow.tsx";
+import SqEqAnimation from "../diagrams/SqEqAnimation.tsx";
+
+// MDX Content
+import Overview from "../content/ja/codex/01-overview.mdx";
+import AgentLoopContent from "../content/ja/codex/02-agent-loop.mdx";
+import ToolSystemContent from "../content/ja/codex/03-tool-system.mdx";
+import SandboxContent from "../content/ja/codex/04-sandbox.mdx";
+import ApprovalContent from "../content/ja/codex/05-approval.mdx";
+import ConfigContent from "../content/ja/codex/06-config.mdx";
+import ComparisonContent from "../content/ja/codex/07-comparison.mdx";
+import TakeawaysContent from "../content/ja/codex/08-takeaways.mdx";
+
+const t = useTranslation("ja");
+
+const whyCards = [
+  {
+    icon: "🛡️",
+    title: t("card.security"),
+    desc: t("card.securityDesc"),
+    color: "var(--color-accent-rose)",
+  },
+  {
+    icon: "🏗️",
+    title: t("card.design"),
+    desc: t("card.designDesc"),
+    color: "var(--color-accent-indigo)",
+  },
+  {
+    icon: "🚀",
+    title: t("card.builder"),
+    desc: t("card.builderDesc"),
+    color: "var(--color-accent-emerald)",
+  },
+];
+---
+
+<BaseLayout title={`Codex CLI — ${t("site.title")}`} description={t("site.description")} lang="ja">
+  <Hero lang="ja" />
+
+  <!-- Why Study Section -->
+  <section id="why-study" class="py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <h2 class="mb-12 text-center text-3xl font-bold text-[var(--color-text-primary)]">
+        {t("section.whyStudy")}
+      </h2>
+      <div class="grid gap-6 md:grid-cols-3">
+        {
+          whyCards.map((card) => (
+            <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 transition-all hover:border-[var(--color-accent-indigo)]/50 hover:bg-white/[0.04]">
+              <div
+                class="mb-4 flex h-12 w-12 items-center justify-center rounded-lg text-2xl"
+                style={`background: color-mix(in srgb, ${card.color} 15%, transparent)`}
+              >
+                {card.icon}
+              </div>
+              <h3 class="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">
+                {card.title}
+              </h3>
+              <p class="text-sm leading-relaxed text-[var(--color-text-secondary)]">{card.desc}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 1: Architecture Overview -->
+  <section id="overview" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">1</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">アーキテクチャ概要</h2>
+      </div>
+
+      <div class="mb-10 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+        <ArchitectureOverview client:visible />
+      </div>
+
+      <div class="mb-8 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+        <h3 class="mb-4 text-lg font-semibold text-[var(--color-accent-cyan)]">SQ/EQ メッセージフロー</h3>
+        <SqEqAnimation client:visible />
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <Overview />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Agent Loop -->
+  <section id="agent-loop" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">2</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">エージェントループ</h2>
+      </div>
+
+      <div class="mb-10 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+        <AgentLoop client:visible />
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <AgentLoopContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Tool System -->
+  <section id="tool-system" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">3</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">ツールシステム</h2>
+      </div>
+
+      <div class="mb-10 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+        <ToolSystem client:visible />
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <ToolSystemContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Sandbox Security (★MAIN) -->
+  <section id="sandbox" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-rose)]/20 font-mono text-sm text-[var(--color-accent-rose)]">4</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">サンドボックスセキュリティ</h2>
+        <span class="rounded-full bg-[var(--color-accent-rose)]/10 px-3 py-1 text-xs text-[var(--color-accent-rose)]">メインコンテンツ</span>
+      </div>
+
+      <div class="mb-10 rounded-xl border border-[var(--color-accent-rose)]/20 bg-white/[0.02] p-6">
+        <SandboxFlow client:visible />
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <SandboxContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 5: Approval System -->
+  <section id="approval" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">5</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">承認システム</h2>
+      </div>
+
+      <div class="mb-10 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+        <ApprovalFlow client:visible />
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <ApprovalContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 6: Configuration -->
+  <section id="config" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">6</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">設定システム</h2>
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <ConfigContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 7: Comparison -->
+  <section id="comparison" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">7</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">ツール比較</h2>
+      </div>
+
+      <div class="mb-10">
+        <ComparisonTable lang="ja" />
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <ComparisonContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 8: Takeaways -->
+  <section id="takeaways" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-6xl px-4">
+      <div class="mb-8 flex items-center gap-3">
+        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-emerald)]/20 font-mono text-sm text-[var(--color-accent-emerald)]">8</span>
+        <h2 class="text-3xl font-bold text-[var(--color-text-primary)]">設計パターンまとめ</h2>
+      </div>
+
+      <div class="prose-dark prose prose-lg max-w-none">
+        <TakeawaysContent />
+      </div>
+    </div>
+  </section>
+
+  <!-- References & License -->
+  <section id="references" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-4xl px-4">
+      <h2 class="mb-8 text-2xl font-bold text-[var(--color-text-primary)]">参考資料 & ライセンス</h2>
+      <div class="grid gap-6 md:grid-cols-2">
+        <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">リンク集</h3>
+          <ul class="space-y-2 text-sm text-[var(--color-text-secondary)]">
+            <li>
+              <a href="https://github.com/openai/codex" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+                OpenAI Codex CLI (GitHub)
+              </a>
+            </li>
+            <li>
+              <a href="https://www.apache.org/licenses/LICENSE-2.0" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+                Apache License 2.0
+              </a>
+            </li>
+            <li>
+              <a href="https://modelcontextprotocol.io/" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+                Model Context Protocol (MCP)
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">ライセンス表記</h3>
+          <p class="text-sm leading-relaxed text-[var(--color-text-secondary)]">
+            本サイトで引用するコードスニペットは OpenAI Codex CLI リポジトリから取得したもので、
+            Apache License 2.0 に基づき使用しています。「OpenAI」「Codex」は各社の商標であり、
+            本サイトは独立した教育リソースです。
+          </p>
+          <a href="/NOTICE" class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
+            NOTICE ファイルを表示 →
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

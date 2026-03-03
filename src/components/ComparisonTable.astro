@@ -1,0 +1,81 @@
+---
+import { type Lang } from "../i18n/utils";
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = "ja" } = Astro.props;
+
+const rows = [
+  {
+    category: lang === "ja" ? "ライセンス" : "License",
+    codex: "Apache-2.0",
+    claude: lang === "ja" ? "プロプライエタリ (ソース公開)" : "Proprietary (source available)",
+  },
+  {
+    category: lang === "ja" ? "コア言語" : "Core Language",
+    codex: "Rust + TypeScript",
+    claude: "TypeScript",
+  },
+  {
+    category: "API",
+    codex: "OpenAI Responses API",
+    claude: "Anthropic Messages API",
+  },
+  {
+    category: lang === "ja" ? "サンドボックス" : "Sandbox",
+    codex: "bubblewrap + Landlock + seccomp (Linux)\nSeatbelt (macOS)\nRestricted Token (Windows)",
+    claude: lang === "ja" ? "コンテナベース" : "Container-based",
+  },
+  {
+    category: lang === "ja" ? "ツール拡張" : "Tool Extension",
+    codex: "MCP + Custom Handlers",
+    claude: "MCP + Bash/Read/Write/etc.",
+  },
+  {
+    category: lang === "ja" ? "承認システム" : "Approval System",
+    codex: "Starlark DSL + ExecPolicy",
+    claude: lang === "ja" ? "許可モード (Plan/Auto-accept)" : "Permission modes (Plan/Auto-accept)",
+  },
+  {
+    category: lang === "ja" ? "プロトコル" : "Protocol",
+    codex: "SQ/EQ (Session Query/Event Queue)",
+    claude: lang === "ja" ? "直接統合" : "Direct integration",
+  },
+];
+---
+
+<div class="overflow-x-auto rounded-lg border border-[var(--color-border)]">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-[var(--color-border)] bg-[var(--color-bg-code)]">
+        <th class="px-4 py-3 text-left text-xs font-medium text-[var(--color-text-muted)]">
+          {lang === "ja" ? "項目" : "Feature"}
+        </th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-[var(--color-accent-indigo)]">
+          Codex CLI
+        </th>
+        <th class="px-4 py-3 text-left text-xs font-medium text-[var(--color-accent-cyan)]">
+          Claude Code
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((row, i) => (
+          <tr
+            class:list={[
+              "border-b border-[var(--color-border)]",
+              { "bg-white/[0.02]": i % 2 === 1 },
+            ]}
+          >
+            <td class="px-4 py-3 font-medium text-[var(--color-text-primary)]">{row.category}</td>
+            <td class="whitespace-pre-line px-4 py-3 text-[var(--color-text-secondary)]">{row.codex}</td>
+            <td class="whitespace-pre-line px-4 py-3 text-[var(--color-text-secondary)]">{row.claude}</td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>

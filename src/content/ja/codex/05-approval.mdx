@@ -1,0 +1,300 @@
+---
+title: "承認システム"
+order: 5
+description: "ExecApprovalRequirement、AskForApproval、ToolOrchestrator、ExecPolicy Starlark DSLを解説"
+---
+
+## 承認システムの設計思想
+
+AI エージェントが自律的にコマンドを実行する環境では、**何を自動承認し、何をユーザーに確認するか** の判断が極めて重要である。Codex CLI の承認システムは、セキュリティと利便性のバランスを段階的に制御する。
+
+## AskForApproval enum
+
+承認ポリシーは `AskForApproval` enum で表現される。
+
+```rust
+/// Determines the conditions under which the user is consulted
+/// to approve running the command proposed by Codex.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum AskForApproval {
+    /// Only "known safe" read-only commands are auto-approved.
+    /// Everything else will ask the user.
+    UnlessTrusted,
+
+    /// DEPRECATED: All commands are auto-approved but run inside
+    /// a sandbox. On failure, escalated to user.
+    OnFailure,
+
+    /// The model decides when to ask the user for approval.
+    #[default]
+    OnRequest,
+
+    /// Fine-grained rejection controls for approval prompts.
+    Reject(RejectConfig),
+
+    /// Never ask the user to approve commands. Failures are
+    /// immediately returned to the model.
+    Never,
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L446-L493 */}
+
+### 各ポリシーの動作
+
+| ポリシー | 読み取り | 書き込み | ネットワーク | ユーザー確認 |
+|---------|---------|---------|------------|------------|
+| `UnlessTrusted` | 自動承認 | 確認 | 確認 | 常に |
+| `OnRequest` | 自動承認 | サンドボックス内で自動 | サンドボックス内で自動 | モデル判断 |
+| `OnFailure` | 自動承認 | サンドボックスで試行 | サンドボックスで試行 | 失敗時のみ |
+| `Never` | 自動承認 | サンドボックス内で自動 | サンドボックス内で自動 | なし |
+| `Reject` | 設定依存 | 設定依存 | 設定依存 | 拒否設定に従う |
+
+### RejectConfig
+
+```rust
+#[derive(Debug, Clone, Copy)]
+pub struct RejectConfig {
+    /// Reject approval prompts related to sandbox escalation.
+    pub sandbox_approval: bool,
+    /// Reject prompts triggered by execpolicy `prompt` rules.
+    pub rules: bool,
+    /// Reject MCP elicitation prompts.
+    pub mcp_elicitations: bool,
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L495-L503 */}
+
+## ExecApprovalRequirement
+
+承認判定の結果は 3 つの状態で表現される。
+
+```rust
+pub enum ExecApprovalRequirement {
+    /// Command can be executed without user approval.
+    Skip {
+        bypass_sandbox: bool,
+        proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
+    },
+
+    /// Command execution is forbidden.
+    Forbidden { reason: String },
+
+    /// User must approve before execution.
+    NeedsApproval {
+        reason: Option<String>,
+        proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
+    },
+}
+```
+
+- **Skip**: 自動承認。サンドボックスバイパスの可否も含む
+- **Forbidden**: 実行拒否。理由をモデルに返す
+- **NeedsApproval**: ユーザーの承認が必要。次回からの自動承認ルール提案も含む
+
+## ToolOrchestrator
+
+`ToolOrchestrator` は承認・サンドボックス選択・リトライを一元管理する。
+
+```rust
+pub(crate) struct ToolOrchestrator {
+    sandbox: SandboxManager,
+}
+
+impl ToolOrchestrator {
+    pub async fn run<Rq, Out, T>(
+        &mut self,
+        tool: &mut T,
+        req: &Rq,
+        tool_ctx: &ToolCtx,
+        turn_ctx: &TurnContext,
+        approval_policy: AskForApproval,
+    ) -> Result<OrchestratorRunResult<Out>, ToolError>
+    where
+        T: ToolRuntime<Rq, Out>,
+    {
+        // 1) Approval
+        let requirement = tool
+            .exec_approval_requirement(req)
+            .unwrap_or_else(|| {
+                default_exec_approval_requirement(
+                    approval_policy,
+                    &turn_ctx.sandbox_policy,
+                )
+            });
+        match requirement {
+            ExecApprovalRequirement::Skip { .. } => { /* auto */ }
+            ExecApprovalRequirement::Forbidden { reason } => {
+                return Err(ToolError::Rejected(reason));
+            }
+            ExecApprovalRequirement::NeedsApproval { .. } => {
+                let decision = tool
+                    .start_approval_async(req, approval_ctx)
+                    .await;
+                match decision {
+                    ReviewDecision::Denied
+                    | ReviewDecision::Abort => {
+                        return Err(ToolError::Rejected(
+                            "rejected by user".to_string()
+                        ));
+                    }
+                    ReviewDecision::Approved
+                    | ReviewDecision::ApprovedForSession => {}
+                    // ...
+                }
+            }
+        }
+
+        // 2) First attempt under the selected sandbox
+        let initial_sandbox = self.sandbox.select_initial(
+            &turn_ctx.sandbox_policy,
+            tool.sandbox_preference(),
+            // ...
+        );
+        let (first_result, _) = Self::run_attempt(
+            tool, req, tool_ctx, &initial_attempt, // ...
+        ).await;
+
+        match first_result {
+            Ok(out) => Ok(OrchestratorRunResult { output: out, .. }),
+            Err(ToolError::Codex(CodexErr::Sandbox(
+                SandboxErr::Denied { .. }
+            ))) => {
+                // 3) Escalation: retry without sandbox
+                // (with user approval)
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
+```
+{/* source: codex-rs/core/src/tools/orchestrator.rs:L33-L324 */}
+
+### ToolOrchestrator の実行フロー
+
+1. **承認チェック**: `ExecApprovalRequirement` に基づき承認判定
+2. **サンドボックス内実行**: プラットフォーム固有のサンドボックスで最初の実行を試行
+3. **エスカレーション**: サンドボックスによる拒否時、ユーザーの再承認を得てサンドボックスなしで再試行
+4. **ネットワーク承認**: ネットワークポリシーに基づく追加承認
+
+## ExecPolicy Starlark DSL
+
+コマンドの許可・拒否ルールは **Starlark DSL** で定義される。
+
+```rust
+pub(crate) struct ExecPolicyManager {
+    policy: ArcSwap<Policy>,
+}
+
+impl ExecPolicyManager {
+    pub(crate) async fn
+        create_exec_approval_requirement_for_command(
+            &self,
+            req: ExecApprovalRequest<'_>,
+        ) -> ExecApprovalRequirement
+    {
+        let exec_policy = self.current();
+        let evaluation = exec_policy
+            .check_multiple_with_options(
+                commands.iter(),
+                &exec_policy_fallback,
+                &match_options,
+            );
+
+        match evaluation.decision {
+            Decision::Forbidden => {
+                ExecApprovalRequirement::Forbidden { /* ... */ }
+            }
+            Decision::Prompt => {
+                ExecApprovalRequirement::NeedsApproval { /* ... */ }
+            }
+            Decision::Allow => {
+                ExecApprovalRequirement::Skip { /* ... */ }
+            }
+        }
+    }
+}
+```
+{/* source: codex-rs/core/src/exec_policy.rs:L168-L281 */}
+
+### ルールファイルの例
+
+```
+# ~/.codex/rules/default.rules
+# プレフィックスベースの許可ルール
+allow prefix npm test
+allow prefix cargo build
+allow prefix git status
+
+# 危険なコマンドの禁止
+forbidden prefix rm -rf /
+forbidden prefix sudo
+
+# 確認が必要なコマンド
+prompt prefix git push
+```
+
+### 承認キャッシュ (自動ルール提案)
+
+ユーザーがコマンドを承認すると、Codex CLI は **ExecPolicyAmendment** として次回からの自動承認ルールを提案する。
+
+```rust
+pub(crate) async fn append_amendment_and_update(
+    &self,
+    codex_home: &Path,
+    amendment: &ExecPolicyAmendment,
+) -> Result<(), ExecPolicyUpdateError> {
+    let policy_path = default_policy_path(codex_home);
+    let prefix = amendment.command.clone();
+    spawn_blocking({
+        move || blocking_append_allow_prefix_rule(
+            &policy_path, &prefix
+        )
+    }).await??;
+
+    let mut updated_policy =
+        self.current().as_ref().clone();
+    updated_policy.add_prefix_rule(
+        &prefix, Decision::Allow
+    )?;
+    self.policy.store(Arc::new(updated_policy));
+    Ok(())
+}
+```
+{/* source: codex-rs/core/src/exec_policy.rs:L283-L306 */}
+
+承認されたコマンドのプレフィックスを `default.rules` ファイルに追記し、インメモリのポリシーも即座に更新する。これにより、同じコマンドパターンに対する再承認が不要になる。
+
+## 安全性評価
+
+パッチ適用の安全性は `assess_patch_safety` で評価される。
+
+```rust
+pub fn assess_patch_safety(
+    action: &ApplyPatchAction,
+    policy: AskForApproval,
+    sandbox_policy: &SandboxPolicy,
+    cwd: &Path,
+    windows_sandbox_level: WindowsSandboxLevel,
+) -> SafetyCheck {
+    if action.is_empty() {
+        return SafetyCheck::Reject {
+            reason: "empty patch".to_string(),
+        };
+    }
+    // Check if write targets are within writable roots
+    if is_write_patch_constrained_to_writable_paths(
+        action, sandbox_policy, cwd
+    ) {
+        // Auto-approve with sandbox enforcement
+        SafetyCheck::AutoApprove {
+            sandbox_type: get_platform_sandbox(/* ... */),
+            user_explicitly_approved: false,
+        }
+    } else {
+        SafetyCheck::AskUser
+    }
+}
+```
+{/* source: codex-rs/core/src/safety.rs:L27-L105 */}
+
+パッチが書き込み可能なルート内に収まる場合はサンドボックス付きで自動承認し、範囲外への書き込みはユーザー確認を要求する。

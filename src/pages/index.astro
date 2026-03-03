@@ -1,0 +1,73 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { useTranslation } from "../i18n/utils";
+
+const t = useTranslation("ja");
+---
+
+<BaseLayout title={t("site.title")} description={t("site.description")} lang="ja">
+  <section class="relative overflow-hidden pb-20 pt-32">
+    <!-- Glow effects -->
+    <div
+      class="pointer-events-none absolute left-1/4 top-0 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-[var(--color-accent-indigo)] opacity-[0.07] blur-[120px]"
+    >
+    </div>
+
+    <div class="relative mx-auto max-w-5xl px-4 text-center">
+      <h1 class="mb-4 text-5xl font-bold tracking-tight md:text-6xl">
+        <span class="text-[var(--color-text-primary)]">AI Agent Architecture</span>
+        <br />
+        <span class="bg-gradient-to-r from-[var(--color-accent-indigo)] to-[var(--color-accent-cyan)] bg-clip-text text-transparent">
+          Atlas
+        </span>
+      </h1>
+
+      <p class="mx-auto mb-12 max-w-2xl text-lg text-[var(--color-text-secondary)]">
+        AIコーディングエージェントのアーキテクチャを深く理解するための教育サイト
+      </p>
+
+      <!-- Tool Cards -->
+      <div class="mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
+        <!-- Codex CLI Card (Active) -->
+        <a
+          href="/codex"
+          class="group relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 text-left transition-all hover:border-[var(--color-accent-indigo)] hover:bg-white/[0.04] hover:shadow-lg hover:shadow-[var(--color-accent-indigo)]/10"
+        >
+          <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--color-accent-emerald)]/10 px-3 py-1">
+            <span class="h-2 w-2 rounded-full bg-[var(--color-accent-emerald)]"></span>
+            <span class="text-xs text-[var(--color-accent-emerald)]">公開中</span>
+          </div>
+          <h2 class="mb-2 text-xl font-semibold text-[var(--color-text-primary)]">
+            Codex CLI
+          </h2>
+          <p class="mb-4 text-sm text-[var(--color-text-secondary)]">
+            OpenAI のオープンソース AI コーディングエージェント。Rust + TypeScript ハイブリッドアーキテクチャ、マルチプラットフォームサンドボックス、SQ/EQ プロトコルを深掘り。
+          </p>
+          <div class="flex items-center gap-2 text-xs text-[var(--color-accent-cyan)]">
+            <span>解説を読む</span>
+            <svg class="h-3 w-3 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </div>
+        </a>
+
+        <!-- Coming Soon Card -->
+        <div
+          class="relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/[0.01] p-6 text-left opacity-60"
+        >
+          <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1">
+            <span class="h-2 w-2 rounded-full bg-[var(--color-text-muted)]"></span>
+            <span class="text-xs text-[var(--color-text-muted)]">準備中</span>
+          </div>
+          <h2 class="mb-2 text-xl font-semibold text-[var(--color-text-primary)]">
+            Claude Code
+          </h2>
+          <p class="mb-4 text-sm text-[var(--color-text-secondary)]">
+            Anthropic の CLI ベース AI コーディングツール。ソース公開のアーキテクチャを解析予定。
+          </p>
+          <span class="text-xs text-[var(--color-text-muted)]">Coming Soon</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

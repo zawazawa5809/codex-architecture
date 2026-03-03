@@ -1,0 +1,27 @@
+AI Agent Architecture Atlas
+Copyright 2025 AI Agent Architecture Atlas Contributors
+
+This educational site analyzes and references code from the following projects:
+
+---
+
+Codex CLI
+Copyright 2025 OpenAI
+Licensed under the Apache License, Version 2.0
+https://github.com/openai/codex
+
+Code snippets from Codex CLI are reproduced under the Apache License 2.0
+for educational and commentary purposes. This site is an independent
+educational resource and is not affiliated with or endorsed by OpenAI.
+
+---
+
+The analyzed Codex CLI codebase includes components from:
+
+Ratatui - A Rust crate for building terminal user interfaces
+Copyright (c) The Ratatui Developers
+Licensed under the MIT License
+
+Meriyah - A 100% compliant, self-hosted JavaScript parser
+Copyright (c) Nicola Del Gobbo
+Licensed under the ISC License

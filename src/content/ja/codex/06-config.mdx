@@ -1,0 +1,208 @@
+---
+title: "設定システム"
+order: 6
+description: "階層化TOML設定、Feature Flags、Constrained<T>パターンによる型安全な設定値制約を解説"
+---
+
+## 階層化 TOML 設定
+
+Codex CLI の設定は **3 層の TOML ファイル** をマージして構成される。下層の設定が上層の設定を上書きする。
+
+```
+~/.codex/config.toml          # Global: ユーザー全体の設定
+<project>/.codex/config.toml   # Project: プロジェクト固有の設定
+<project>/.codex.toml          # Local: ローカルオーバーライド
+```
+
+### Config 構造体
+
+```rust
+/// Application configuration loaded from disk and merged
+/// with overrides.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Config {
+    /// Provenance for how this Config was derived
+    /// (merged layers + enforced requirements).
+    pub config_layer_stack: ConfigLayerStack,
+
+    /// Warnings collected during config load.
+    pub startup_warnings: Vec<String>,
+
+    /// Optional override of model selection.
+    pub model: Option<String>,
+
+    /// Size of the context window for the model, in tokens.
+    pub model_context_window: Option<i64>,
+
+    /// Token threshold triggering auto-compaction.
+    pub model_auto_compact_token_limit: Option<i64>,
+
+    /// Effective permission configuration.
+    pub permissions: Permissions,
+
+    /// Definition for MCP servers.
+    pub mcp_servers: Constrained<HashMap<String, McpServerConfig>>,
+
+    /// Combined provider map.
+    pub model_providers: HashMap<String, ModelProviderInfo>,
+
+    /// The working directory for the session.
+    pub cwd: PathBuf,
+
+    // ...
+}
+```
+{/* source: codex-rs/core/src/config/mod.rs:L148-L350 */}
+
+### Permissions 構造体
+
+```rust
+pub struct Permissions {
+    /// Approval policy for executing commands.
+    pub approval_policy: Constrained<AskForApproval>,
+
+    /// Effective sandbox policy used for shell/unified exec.
+    pub sandbox_policy: Constrained<SandboxPolicy>,
+
+    /// Effective network configuration.
+    pub network: Option<NetworkProxySpec>,
+
+    /// Whether the model may request a login shell.
+    pub allow_login_shell: bool,
+
+    /// Policy used to build process environments.
+    pub shell_environment_policy: ShellEnvironmentPolicy,
+
+    /// Windows sandbox mode.
+    pub windows_sandbox_mode: Option<WindowsSandboxModeToml>,
+
+    /// macOS seatbelt extension profile.
+    pub macos_seatbelt_profile_extensions:
+        Option<MacOsSeatbeltProfileExtensions>,
+}
+```
+{/* source: codex-rs/core/src/config/mod.rs:L150-L174 */}
+
+`approval_policy` と `sandbox_policy` は `Constrained<T>` でラップされており、設定値の変更に制約が適用される。
+
+## Constrained&lt;T&gt; パターン
+
+`Constrained<T>` は **型安全な設定値制約** を実現するパターンである。
+
+```rust
+/// A ConstraintValidator is a function that validates a value.
+/// It returns Ok(()) if the value is valid, or Err with a
+/// description of the constraint violation.
+type ConstraintValidator<T> =
+    dyn Fn(&T) -> Result<(), String> + Send + Sync;
+
+/// A ConstraintNormalizer transforms a value into another
+/// of the same type.
+type ConstraintNormalizer<T> =
+    dyn Fn(T) -> T + Send + Sync;
+
+#[derive(Clone)]
+pub struct Constrained<T> {
+    value: T,
+    validator: Arc<ConstraintValidator<T>>,
+    normalizer: Option<Arc<ConstraintNormalizer<T>>>,
+}
+```
+{/* source: codex-rs/config/src/constraint.rs:L46-L55 */}
+
+### 設計意図
+
+1. **不変条件の保証**: バリデータにより、設定値が常に有効な範囲内に収まる
+2. **正規化**: ノーマライザにより、設定値の変更時に関連する調整を自動適用
+3. **制約の伝搬**: 組織のセキュリティ要件を設定レベルで強制
+
+### 使用例
+
+例えば `approval_policy` に対して「組織ポリシーにより `Never` は使用不可」という制約を設定できる。
+
+```rust
+// 概念的な使用例
+let constrained_policy = Constrained::new(
+    AskForApproval::OnRequest,
+    |policy| {
+        if matches!(policy, AskForApproval::Never) {
+            Err("Organization policy requires approval".into())
+        } else {
+            Ok(())
+        }
+    },
+);
+```
+
+## ConfigLayerStack
+
+設定の出自（どの層のどの設定ファイルから来たか）を追跡する。
+
+```rust
+pub struct ConfigLayerStack {
+    // merged layers + enforced requirements
+}
+```
+
+これにより、設定の競合が発生した場合に、どの層が優先されたかを診断できる。
+
+## Feature Flags
+
+Codex CLI は **Feature Flags** で新機能のロールアウトを制御する。
+
+```rust
+pub struct Features {
+    // ...
+}
+
+impl Features {
+    pub fn enabled(&self, feature: Feature) -> bool {
+        // ...
+    }
+}
+```
+
+### Feature Flag のライフサイクル
+
+1. **`UnderDevelopment`**: 開発中。デフォルト無効
+2. **Gradual Rollout**: 一部ユーザーに有効化
+3. **`Default`**: 全ユーザーに有効化
+4. **Code Cleanup**: フラグを削除し、機能を正規コードパスに統合
+
+Feature Flags の例:
+
+| フラグ | 機能 |
+|-------|------|
+| `ResponsesWebsockets` | WebSocket ストリーミング |
+| `ResponsesWebsocketsV2` | WebSocket V2 プロトコル |
+| `UseLinuxSandboxBwrap` | bubblewrap サンドボックス |
+| `Apps` | アプリケーション統合 |
+
+## TOML 設定の例
+
+```toml
+# ~/.codex/config.toml
+
+# モデル設定
+model = "o4-mini"
+
+# 承認ポリシー
+[permissions]
+approval_policy = "on-request"
+
+[permissions.sandbox]
+type = "workspace-write"
+network_access = false
+
+# MCP サーバー設定
+[mcp_servers.github]
+command = "gh-mcp"
+args = ["serve"]
+
+# 通知設定
+notify = ["notify-send", "Codex"]
+
+# TUI 設定
+[tui]
+alternate_screen = "auto"
+```

@@ -1,0 +1,234 @@
+---
+title: "ツールシステム"
+order: 3
+description: "ToolHandler trait、ToolRegistry、並列ツール実行、組み込みツール一覧、MCP統合を解説"
+---
+
+## ツールシステムの設計思想
+
+Codex CLI のツールシステムは **trait-based registration** パターンで設計されている。各ツールは `ToolHandler` trait を実装し、`ToolRegistry` に登録される。この設計により、新しいツールの追加が容易で、型安全性が保証される。
+
+## ToolHandler trait
+
+```rust
+#[async_trait]
+pub trait ToolHandler: Send + Sync {
+    fn kind(&self) -> ToolKind;
+
+    fn matches_kind(&self, payload: &ToolPayload) -> bool {
+        matches!(
+            (self.kind(), payload),
+            (ToolKind::Function, ToolPayload::Function { .. })
+                | (ToolKind::Mcp, ToolPayload::Mcp { .. })
+        )
+    }
+
+    /// Returns `true` if the ToolInvocation *might* mutate the
+    /// environment of the user (file system, OS operations, ...).
+    async fn is_mutating(
+        &self, _invocation: &ToolInvocation
+    ) -> bool {
+        false
+    }
+
+    /// Perform the actual ToolInvocation and returns a ToolOutput.
+    async fn handle(
+        &self, invocation: ToolInvocation
+    ) -> Result<ToolOutput, FunctionCallError>;
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L33-L56 */}
+
+### trait の設計ポイント
+
+- **`kind()`**: ツールの種別（`Function` / `Mcp`）を返す。ペイロードの型との整合性チェックに使用
+- **`is_mutating()`**: ツールが環境を変更する可能性があるかを判定。変更を伴うツールは **tool_call_gate** による逐次制御を受ける
+- **`handle()`**: 実際のツール実行ロジック。非同期で `ToolOutput` を返す
+
+## ToolRegistry
+
+`ToolRegistry` はツール名からハンドラーへのマッピングを保持し、ディスパッチを行う。
+
+```rust
+pub struct ToolRegistry {
+    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+}
+
+impl ToolRegistry {
+    pub fn new(
+        handlers: HashMap<String, Arc<dyn ToolHandler>>
+    ) -> Self {
+        Self { handlers }
+    }
+
+    pub fn handler(
+        &self, name: &str
+    ) -> Option<Arc<dyn ToolHandler>> {
+        self.handlers.get(name).map(Arc::clone)
+    }
+
+    pub async fn dispatch(
+        &self,
+        invocation: ToolInvocation,
+    ) -> Result<ResponseInputItem, FunctionCallError> {
+        let tool_name = invocation.tool_name.clone();
+        let handler = match self.handler(tool_name.as_ref()) {
+            Some(handler) => handler,
+            None => {
+                return Err(FunctionCallError::RespondToModel(
+                    unsupported_tool_call_message(
+                        &invocation.payload, tool_name.as_ref()
+                    )
+                ));
+            }
+        };
+        // ... validation, execution, hooks
+    }
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L58-L223 */}
+
+### ToolRegistryBuilder
+
+ツールの登録は `ToolRegistryBuilder` を介して行われる。
+
+```rust
+pub struct ToolRegistryBuilder {
+    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+    specs: Vec<ConfiguredToolSpec>,
+}
+
+impl ToolRegistryBuilder {
+    pub fn register_handler(
+        &mut self,
+        name: impl Into<String>,
+        handler: Arc<dyn ToolHandler>,
+    ) {
+        let name = name.into();
+        if self.handlers
+            .insert(name.clone(), handler.clone())
+            .is_some()
+        {
+            warn!("overwriting handler for tool {name}");
+        }
+    }
+
+    pub fn build(self) -> (Vec<ConfiguredToolSpec>, ToolRegistry) {
+        let registry = ToolRegistry::new(self.handlers);
+        (self.specs, registry)
+    }
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L241-L300 */}
+
+## ToolPayload: ツール呼び出しの種類
+
+```rust
+pub enum ToolPayload {
+    Function { arguments: Value },
+    Custom { input: Value },
+    LocalShell { params: LocalShellParams },
+    Mcp { server: String, tool: String, raw_arguments: Value },
+}
+```
+
+ツールの種類に応じて 4 つのペイロード型がある。
+
+- **Function**: JSON Schema ベースの関数呼び出し
+- **LocalShell**: シェルコマンドの実行
+- **Mcp**: MCP サーバー経由のツール呼び出し
+- **Custom**: カスタムツール
+
+## 並列ツール実行
+
+ツール実行における並列性は `ConfiguredToolSpec` で制御される。
+
+```rust
+#[derive(Debug, Clone)]
+pub struct ConfiguredToolSpec {
+    pub spec: ToolSpec,
+    pub supports_parallel_tool_calls: bool,
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L226-L230 */}
+
+- `supports_parallel_tool_calls: true` のツールは並列実行可能
+- **変更を伴うツール** (`is_mutating() == true`) は `tool_call_gate` によってシリアライズされる
+
+```rust
+if is_mutating {
+    tracing::trace!("waiting for tool gate");
+    invocation_for_tool.turn.tool_call_gate
+        .wait_ready().await;
+    tracing::trace!("tool gate released");
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L174-L178 */}
+
+これにより、読み取り専用のツール（`ReadFile`、`Grep` など）は並列実行しつつ、ファイル書き込みやシェルコマンドは安全に逐次実行される。
+
+## 組み込みツール一覧
+
+Codex CLI は以下の組み込みツールを提供する。
+
+| ツール名 | 機能 | 変更操作 |
+|---------|------|---------|
+| `local_shell` | シェルコマンド実行 | Yes |
+| `apply_patch` | ファイルのパッチ適用 | Yes |
+| `read_file` | ファイル読み取り | No |
+| `list_dir` | ディレクトリ一覧 | No |
+| `grep` | パターン検索 | No |
+| `write_file` | ファイル書き込み | Yes |
+| `view_image` | 画像表示 | No |
+
+## MCP (Model Context Protocol) 統合
+
+Codex CLI は **MCP (Model Context Protocol)** を通じて外部ツールサーバーとの統合をサポートする。
+
+### MCP ツールの登録
+
+MCP サーバーから公開されたツールは `ToolKind::Mcp` として登録される。
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ToolKind {
+    Function,
+    Mcp,
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L27-L31 */}
+
+### MCP 命名規則
+
+MCP ツールは `server_name__tool_name` の命名規則に従う。サーバー名とツール名をダブルアンダースコアで結合することで、名前の衝突を回避する。
+
+### Hooks 統合
+
+ツール実行の前後にフック処理が実行される。
+
+```rust
+async fn dispatch_after_tool_use_hook(
+    dispatch: AfterToolUseHookDispatch<'_>,
+) -> Option<FunctionCallError> {
+    let tool_input = HookToolInput::from(&invocation.payload);
+    let hook_outcomes = session
+        .hooks()
+        .dispatch(HookPayload {
+            hook_event: HookEvent::AfterToolUse {
+                event: HookEventAfterToolUse {
+                    tool_name: invocation.tool_name.clone(),
+                    tool_kind: hook_tool_kind(&tool_input),
+                    tool_input,
+                    executed: dispatch.executed,
+                    success: dispatch.success,
+                    // ...
+                },
+            },
+        })
+        .await;
+    // ...
+}
+```
+{/* source: codex-rs/core/src/tools/registry.rs:L370-L406 */}
+
+フックの結果により、ツール実行を中断 (`FailedAbort`) することも可能である。これにより、組織のセキュリティポリシーに応じたカスタムガードレールを実装できる。

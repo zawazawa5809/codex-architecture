@@ -1,0 +1,422 @@
+---
+title: "サンドボックスセキュリティ"
+order: 4
+description: "Defense-in-Depth戦略、Linux/macOS/Windowsサンドボックス実装、SandboxPolicy、ネットワークプロキシを解説"
+---
+
+## Defense-in-Depth 戦略
+
+Codex CLI のセキュリティは **多層防御 (Defense-in-Depth)** 戦略に基づいている。AI エージェントが任意のコマンドを実行する特性上、以下の複数のセキュリティ層を組み合わせてリスクを軽減する。
+
+1. **承認システム**: ユーザーによる実行前承認（詳細は次章）
+2. **実行ポリシー**: Starlark DSL によるコマンドの許可・拒否ルール
+3. **サンドボックス**: OS レベルのプロセス隔離
+4. **ネットワーク制御**: プロキシベースのネットワークアクセス管理
+5. **プロセスハードニング**: 権限昇格の防止
+
+## SandboxPolicy enum
+
+サンドボックスの動作はポリシーとして型安全に定義される。
+
+```rust
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum SandboxPolicy {
+    /// No restrictions whatsoever. Use with caution.
+    DangerFullAccess,
+
+    /// Read-only access configuration.
+    ReadOnly {
+        access: ReadOnlyAccess,
+    },
+
+    /// Indicates the process is already in an external sandbox.
+    ExternalSandbox {
+        network_access: NetworkAccess,
+    },
+
+    /// Read + write access to workspace directory.
+    WorkspaceWrite {
+        writable_roots: Vec<AbsolutePathBuf>,
+        read_only_access: ReadOnlyAccess,
+        network_access: bool,
+        exclude_tmpdir_env_var: bool,
+        exclude_slash_tmp: bool,
+    },
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L609-L669 */}
+
+### WritableRoot と読み取り専用サブパス
+
+```rust
+/// A writable root path accompanied by a list of subpaths that
+/// should remain read-only even when the root is writable.
+/// This ensures folders like `.codex`, `.git` (notably `.git/hooks`)
+/// cannot be modified by the agent.
+pub struct WritableRoot {
+    pub root: AbsolutePathBuf,
+    pub read_only_subpaths: Vec<AbsolutePathBuf>,
+}
+
+impl WritableRoot {
+    pub fn is_path_writable(&self, path: &Path) -> bool {
+        if !path.starts_with(&self.root) {
+            return false;
+        }
+        for subpath in &self.read_only_subpaths {
+            if path.starts_with(subpath) {
+                return false;
+            }
+        }
+        true
+    }
+}
+```
+{/* source: codex-rs/protocol/src/protocol.rs:L671-L700 */}
+
+`.git/hooks` や `.codex` ディレクトリは書き込み可能なルート内であっても読み取り専用として保護される。これはエージェントによる権限昇格攻撃を防ぐための設計である。
+
+## SandboxManager
+
+`SandboxManager` はプラットフォームに応じたサンドボックスの選択と変換を担う。
+
+```rust
+#[derive(Default)]
+pub struct SandboxManager;
+
+impl SandboxManager {
+    pub(crate) fn select_initial(
+        &self,
+        policy: &SandboxPolicy,
+        pref: SandboxablePreference,
+        windows_sandbox_level: WindowsSandboxLevel,
+        has_managed_network_requirements: bool,
+    ) -> SandboxType {
+        match pref {
+            SandboxablePreference::Forbid => SandboxType::None,
+            SandboxablePreference::Require => {
+                crate::safety::get_platform_sandbox(
+                    windows_sandbox_level
+                        != WindowsSandboxLevel::Disabled,
+                )
+                .unwrap_or(SandboxType::None)
+            }
+            SandboxablePreference::Auto => match policy {
+                SandboxPolicy::DangerFullAccess
+                | SandboxPolicy::ExternalSandbox { .. } => {
+                    if has_managed_network_requirements {
+                        crate::safety::get_platform_sandbox(/* ... */)
+                            .unwrap_or(SandboxType::None)
+                    } else {
+                        SandboxType::None
+                    }
+                }
+                _ => crate::safety::get_platform_sandbox(/* ... */)
+                    .unwrap_or(SandboxType::None),
+            },
+        }
+    }
+}
+```
+{/* source: codex-rs/core/src/sandboxing/mod.rs:L252-L294 */}
+
+### プラットフォーム検出
+
+```rust
+pub fn get_platform_sandbox(
+    windows_sandbox_enabled: bool,
+) -> Option<SandboxType> {
+    if cfg!(target_os = "macos") {
+        Some(SandboxType::MacosSeatbelt)
+    } else if cfg!(target_os = "linux") {
+        Some(SandboxType::LinuxSeccomp)
+    } else if cfg!(target_os = "windows") {
+        if windows_sandbox_enabled {
+            Some(SandboxType::WindowsRestrictedToken)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+```
+{/* source: codex-rs/core/src/safety.rs:L107-L121 */}
+
+## Linux サンドボックス
+
+Linux では **3 層のサンドボックス** が組み合わされる。
+
+### 1. bubblewrap (ファイルシステム隔離)
+
+bubblewrap (`bwrap`) はユーザー名前空間を利用してファイルシステムのビューを構築する。
+
+```rust
+/// Bubblewrap-based filesystem sandboxing for Linux.
+///
+/// - the filesystem is read-only by default,
+/// - explicit writable roots are layered on top, and
+/// - sensitive subpaths such as `.git` and `.codex` remain read-only
+///   even when their parent root is writable.
+
+pub(crate) fn create_bwrap_command_args(
+    command: Vec<String>,
+    sandbox_policy: &SandboxPolicy,
+    cwd: &Path,
+    options: BwrapOptions,
+) -> Result<Vec<String>> {
+    if sandbox_policy.has_full_disk_write_access() {
+        return if options.network_mode
+            == BwrapNetworkMode::FullAccess
+        {
+            Ok(command)
+        } else {
+            Ok(create_bwrap_flags_full_filesystem(
+                command, options
+            ))
+        };
+    }
+    create_bwrap_flags(command, sandbox_policy, cwd, options)
+}
+```
+{/* source: codex-rs/linux-sandbox/src/bwrap.rs:L1-L101 */}
+
+bubblewrap の主要フラグ:
+
+```rust
+fn create_bwrap_flags(/* ... */) -> Result<Vec<String>> {
+    let mut args = Vec::new();
+    args.push("--new-session".to_string());
+    args.push("--die-with-parent".to_string());
+    args.extend(create_filesystem_args(sandbox_policy, cwd)?);
+    args.push("--unshare-pid".to_string());
+    if options.network_mode.should_unshare_network() {
+        args.push("--unshare-net".to_string());
+    }
+    if options.mount_proc {
+        args.push("--proc".to_string());
+        args.push("/proc".to_string());
+    }
+    args.push("--".to_string());
+    args.extend(command);
+    Ok(args)
+}
+```
+{/* source: codex-rs/linux-sandbox/src/bwrap.rs:L125-L148 */}
+
+- `--new-session`: 新しいセッションを作成しシグナル隔離
+- `--die-with-parent`: 親プロセス終了時に子プロセスも終了
+- `--unshare-pid`: PID 名前空間の隔離
+- `--unshare-net`: ネットワーク名前空間の隔離
+
+#### プラットフォームデフォルト
+
+制限付き読み取りアクセス時に必要な最小限のシステムパスが定義されている。
+
+```rust
+const LINUX_PLATFORM_DEFAULT_READ_ROOTS: &[&str] = &[
+    "/bin",
+    "/sbin",
+    "/usr",
+    "/etc",
+    "/lib",
+    "/lib64",
+    "/nix/store",
+    "/run/current-system/sw",
+];
+```
+{/* source: codex-rs/linux-sandbox/src/bwrap.rs:L26-L35 */}
+
+### 2. Landlock (アクセス制御)
+
+Landlock は Linux カーネルのセキュリティモジュールで、ファイルシステムへのアクセスを制限する。
+
+```rust
+/// Apply sandbox policies inside this thread so only the child
+/// inherits them, not the entire CLI process.
+pub(crate) fn apply_sandbox_policy_to_current_thread(
+    sandbox_policy: &SandboxPolicy,
+    cwd: &Path,
+    apply_landlock_fs: bool,
+    allow_network_for_proxy: bool,
+    proxy_routed_network: bool,
+) -> Result<()> {
+    let network_seccomp_mode = network_seccomp_mode(
+        sandbox_policy,
+        allow_network_for_proxy,
+        proxy_routed_network,
+    );
+
+    // PR_SET_NO_NEW_PRIVS is required for seccomp
+    if network_seccomp_mode.is_some()
+        || (apply_landlock_fs
+            && !sandbox_policy.has_full_disk_write_access())
+    {
+        set_no_new_privs()?;
+    }
+
+    if let Some(mode) = network_seccomp_mode {
+        install_network_seccomp_filter_on_current_thread(mode)?;
+    }
+
+    if apply_landlock_fs
+        && !sandbox_policy.has_full_disk_write_access()
+    {
+        let writable_roots = sandbox_policy
+            .get_writable_roots_with_cwd(cwd)
+            .into_iter()
+            .map(|wr| wr.root)
+            .collect();
+        install_filesystem_landlock_rules_on_current_thread(
+            writable_roots
+        )?;
+    }
+
+    Ok(())
+}
+```
+{/* source: codex-rs/linux-sandbox/src/landlock.rs:L41-L85 */}
+
+Landlock ルールにより、ファイルシステム全体を読み取り可能にしつつ、書き込みは明示的に許可されたパスのみに制限する。
+
+### 3. seccomp BPF (ネットワーク制御)
+
+seccomp BPF はシステムコールレベルでネットワークアクセスを制御する。
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NetworkSeccompMode {
+    /// Block all network system calls.
+    Restricted,
+    /// Allow only proxy-routed connections.
+    ProxyRouted,
+}
+```
+{/* source: codex-rs/linux-sandbox/src/landlock.rs:L87-L91 */}
+
+- `Restricted`: すべてのネットワーク系システムコールをブロック
+- `ProxyRouted`: プロキシ経由の接続のみ許可
+
+## macOS サンドボックス (Seatbelt)
+
+macOS では **sandbox-exec** と **SBPL (Sandbox Profile Language)** プロファイルを使用する。
+
+```rust
+/// When working with sandbox-exec, only consider sandbox-exec in
+/// /usr/bin to defend against an attacker trying to inject a
+/// malicious version on the PATH.
+pub(crate) const MACOS_PATH_TO_SEATBELT_EXECUTABLE: &str =
+    "/usr/bin/sandbox-exec";
+
+const MACOS_SEATBELT_BASE_POLICY: &str =
+    include_str!("seatbelt_base_policy.sbpl");
+const MACOS_SEATBELT_NETWORK_POLICY: &str =
+    include_str!("seatbelt_network_policy.sbpl");
+const MACOS_SEATBELT_PLATFORM_DEFAULTS: &str =
+    include_str!("seatbelt_platform_defaults.sbpl");
+```
+{/* source: codex-rs/core/src/seatbelt.rs:L26-L34 */}
+
+### セキュリティ上の配慮
+
+- `sandbox-exec` は `/usr/bin/sandbox-exec` のみを使用。PATH インジェクション攻撃を防御
+- ベースポリシー + ネットワークポリシー + プラットフォームデフォルトの 3 層構成
+- 拡張プロファイル (`MacOsSeatbeltProfileExtensions`) で追加の許可を付与可能
+
+### サンドボックス変換
+
+```rust
+pub(crate) fn transform(
+    &self,
+    request: SandboxTransformRequest<'_>,
+) -> Result<ExecRequest, SandboxTransformError> {
+    // ...
+    let (command, sandbox_env, arg0_override) = match sandbox {
+        SandboxType::None => (command, HashMap::new(), None),
+        #[cfg(target_os = "macos")]
+        SandboxType::MacosSeatbelt => {
+            let mut seatbelt_env = HashMap::new();
+            seatbelt_env.insert(
+                CODEX_SANDBOX_ENV_VAR.to_string(),
+                "seatbelt".to_string(),
+            );
+            let mut args =
+                create_seatbelt_command_args_with_extensions(
+                    command.clone(),
+                    &effective_policy,
+                    sandbox_policy_cwd,
+                    enforce_managed_network,
+                    network,
+                    macos_seatbelt_profile_extensions,
+                );
+            // ...
+            (full_command, seatbelt_env, None)
+        }
+        SandboxType::LinuxSeccomp => {
+            let exe = codex_linux_sandbox_exe.ok_or(
+                SandboxTransformError::
+                    MissingLinuxSandboxExecutable
+            )?;
+            let args = create_linux_sandbox_command_args(
+                command.clone(),
+                &effective_policy,
+                sandbox_policy_cwd,
+                use_linux_sandbox_bwrap,
+                allow_proxy_network,
+            );
+            // ...
+        }
+        // Windows: restricted token sandbox
+        SandboxType::WindowsRestrictedToken =>
+            (command, HashMap::new(), None),
+    };
+    // ...
+}
+```
+{/* source: codex-rs/core/src/sandboxing/mod.rs:L296-L397 */}
+
+## Windows サンドボックス
+
+Windows では **制限トークン (Restricted Token)** と **ACL 操作** を使用する。`codex-windows-sandbox` クレートがプロセス内でサンドボックスを適用する。
+
+## ネットワークプロキシブリッジ
+
+ネットワークアクセスが必要な場合、直接的な接続を許可する代わりに **プロキシブリッジ** を介して通信する。
+
+```rust
+#[derive(Debug)]
+pub struct ExecRequest {
+    pub command: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: HashMap<String, String>,
+    pub network: Option<NetworkProxy>,
+    pub expiration: ExecExpiration,
+    pub sandbox: SandboxType,
+    pub sandbox_policy: SandboxPolicy,
+    // ...
+}
+```
+{/* source: codex-rs/core/src/sandboxing/mod.rs:L51-L64 */}
+
+`NetworkProxy` フィールドにより、サンドボックス内のプロセスはプロキシ経由でのみネットワークにアクセスできる。プロキシ側でアクセス先のホスト・ポートを制御することで、きめ細かなネットワークポリシーを実現する。
+
+### ネットワーク制御の全体像
+
+```
+┌─────────────────┐     ┌──────────────┐     ┌─────────┐
+│  Sandboxed      │────▶│  Network     │────▶│  外部   │
+│  Process        │     │  Proxy       │     │  API    │
+│  (seccomp で    │     │  (ポリシー   │     │         │
+│   直接通信禁止) │     │   適用)      │     │         │
+└─────────────────┘     └──────────────┘     └─────────┘
+```
+
+## プロセスハードニング
+
+サンドボックスに加えて、以下のプロセスレベルの保護が適用される。
+
+- **`PR_SET_NO_NEW_PRIVS`**: 権限昇格の防止。setuid バイナリの実行を無効化
+- **`--die-with-parent`**: 親プロセスが終了した場合、子プロセスも確実に終了
+- **`--new-session`**: シグナルの隔離
+- **PID 名前空間隔離**: プロセスの可視性を制限

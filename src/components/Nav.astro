@@ -1,0 +1,77 @@
+---
+import { useTranslation, type Lang } from "../i18n/utils";
+import LanguageToggle from "./LanguageToggle.tsx";
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = "ja" } = Astro.props;
+const t = useTranslation(lang);
+
+const sections = [
+  { id: "overview", label: t("nav.overview") },
+  { id: "agent-loop", label: t("nav.agentLoop") },
+  { id: "tool-system", label: t("nav.toolSystem") },
+  { id: "sandbox", label: t("nav.sandbox") },
+  { id: "approval", label: t("nav.approval") },
+  { id: "config", label: t("nav.config") },
+  { id: "comparison", label: t("nav.comparison") },
+  { id: "takeaways", label: t("nav.takeaways") },
+];
+---
+
+<nav
+  id="main-nav"
+  class="fixed top-0 left-0 right-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]/80 backdrop-blur-xl"
+>
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+    <a href="/" class="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
+      <span class="text-[var(--color-accent-indigo)]">&#9670;</span>
+      AI Agent Architecture Atlas
+    </a>
+
+    <div class="hidden items-center gap-1 lg:flex">
+      {
+        sections.map((section) => (
+          <a
+            href={`#${section.id}`}
+            class="nav-link rounded-md px-3 py-1.5 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]"
+            data-section={section.id}
+          >
+            {section.label}
+          </a>
+        ))
+      }
+    </div>
+
+    <LanguageToggle client:load lang={lang} />
+  </div>
+</nav>
+
+<script>
+  const navLinks = document.querySelectorAll<HTMLAnchorElement>(".nav-link");
+  const sections = document.querySelectorAll<HTMLElement>("section[id]");
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          navLinks.forEach((link) => {
+            link.classList.toggle(
+              "text-[var(--color-accent-cyan)]",
+              link.dataset.section === entry.target.id,
+            );
+            link.classList.toggle(
+              "text-[var(--color-text-secondary)]",
+              link.dataset.section !== entry.target.id,
+            );
+          });
+        }
+      });
+    },
+    { rootMargin: "-20% 0px -70% 0px" },
+  );
+
+  sections.forEach((section) => observer.observe(section));
+</script>

@@ -1,0 +1,172 @@
+---
+title: "エージェントループ"
+order: 2
+description: "run_turn関数のフロー、プロンプト構築、APIストリーミング、ツール実行、コンテキスト管理を解説"
+---
+
+## エージェントループの全体像
+
+Codex CLI のエージェントは「ターン」単位で動作する。1 回のターンは以下のサイクルを繰り返す。
+
+1. **プロンプト構築**: ユーザー入力 + コンテキスト + ツール定義を組み立てる
+2. **API 呼び出し**: OpenAI Responses API にストリーミングリクエストを送信
+3. **レスポンス処理**: ストリーミングで受信したテキスト・ツール呼び出しを処理
+4. **ツール実行**: モデルが要求したツール（シェルコマンド、ファイル操作など）を実行
+5. **コンテキスト確認**: トークン使用量を確認し、必要に応じてコンパクション
+6. **ループ継続**: ツール結果をモデルに返し、次の応答を取得
+
+## run_turn 関数
+
+`run_turn` はエージェントループのエントリーポイントである。
+
+```rust
+pub(crate) async fn run_turn(
+    sess: Arc<Session>,
+    turn_context: Arc<TurnContext>,
+    input: Vec<UserInput>,
+    prewarmed_client_session: Option<ModelClientSession>,
+    cancellation_token: CancellationToken,
+) -> Option<String> {
+    if input.is_empty() {
+        return None;
+    }
+
+    let model_info = turn_context.model_info.clone();
+    let auto_compact_limit = model_info
+        .auto_compact_token_limit()
+        .unwrap_or(i64::MAX);
+
+    let event = EventMsg::TurnStarted(TurnStartedEvent {
+        turn_id: turn_context.sub_id.clone(),
+        model_context_window: turn_context.model_context_window(),
+        collaboration_mode_kind: turn_context.collaboration_mode.mode,
+    });
+    sess.send_event(&turn_context, event).await;
+
+    // Pre-sampling compaction check
+    if run_pre_sampling_compact(&sess, &turn_context)
+        .await
+        .is_err()
+    {
+        error!("Failed to run pre-sampling compact");
+        return None;
+    }
+    // ...
+}
+```
+{/* source: codex-rs/core/src/codex.rs:L4832-L4862 */}
+
+### 処理フローの詳細
+
+`run_turn` は以下の順序で処理を進める。
+
+1. **TurnStarted イベント送信**: フロントエンドにターン開始を通知
+2. **プレサンプリングコンパクション**: トークン上限に近い場合、API 呼び出し前に会話履歴を圧縮
+3. **スキル解決**: メンションされたスキル（`/commit` など）の依存関係を解決
+4. **MCP 依存関係インストール**: 必要な MCP サーバーの依存関係を確認
+5. **ユーザー入力記録**: 会話履歴にユーザーの入力を記録
+6. **API ストリーミングループ**: モデルとの対話を開始
+
+## ModelClient: API クライアント
+
+`ModelClient` はセッションスコープの API クライアントで、認証・プロバイダー選択・WebSocket 管理を担う。
+
+```rust
+/// A session-scoped client for model-provider API calls.
+///
+/// WebSocket fallback is session-scoped: once a turn activates the
+/// HTTP fallback, subsequent turns will also use HTTP for the
+/// remainder of the session.
+#[derive(Debug, Clone)]
+pub struct ModelClient {
+    state: Arc<ModelClientState>,
+}
+
+/// A turn-scoped streaming session created from a ModelClient.
+///
+/// The session establishes a Responses WebSocket connection lazily
+/// and reuses it across multiple requests within the turn.
+pub struct ModelClientSession {
+    client: ModelClient,
+    websocket_session: WebsocketSession,
+    // ...
+}
+```
+{/* source: codex-rs/core/src/client.rs:L173-L194 */}
+
+### WebSocket 優先 / SSE フォールバック
+
+Codex CLI は API 通信に **WebSocket を優先** し、接続に失敗した場合は **SSE (Server-Sent Events) にフォールバック** する戦略を採用している。
+
+```rust
+pub fn ws_version_from_features(config: &Config)
+    -> Option<ResponsesWebsocketVersion>
+{
+    match (
+        config.features.enabled(Feature::ResponsesWebsockets),
+        config.features.enabled(Feature::ResponsesWebsocketsV2),
+    ) {
+        (_, true) => Some(ResponsesWebsocketVersion::V2),
+        (true, false) => Some(ResponsesWebsocketVersion::V1),
+        (false, false) => None,
+    }
+}
+```
+{/* source: codex-rs/core/src/client.rs:L117-L130 */}
+
+- **WebSocket V2**: 最新のプロトコル。`response.create` + `response.append` でプリウォームとインクリメンタルリクエストをサポート
+- **WebSocket V1**: 基本的な WebSocket ストリーミング
+- **SSE フォールバック**: WebSocket が使えない環境向け
+
+WebSocket プリウォームは `generate=false` で接続を先行確立し、後続リクエストで同一接続を再利用する。これによりレイテンシを削減する。
+
+## コンテキストコンパクション
+
+会話が長くなるとトークン上限に達するため、Codex CLI は **自動コンパクション** を実装している。
+
+```rust
+pub(crate) async fn run_inline_auto_compact_task(
+    sess: &Arc<Session>,
+    turn_context: &Arc<TurnContext>,
+) -> Result<()> { /* ... */ }
+
+pub(crate) fn should_use_remote_compact_task(
+    provider: &ModelProviderInfo,
+) -> bool { /* ... */ }
+
+pub(crate) fn build_compacted_history(
+    // ...
+) -> Vec<ResponseItem> { /* ... */ }
+```
+{/* source: codex-rs/core/src/compact.rs:L54-L323 */}
+
+コンパクションには 2 つの戦略がある。
+
+1. **インラインコンパクション**: 同一モデルを使って会話を要約
+2. **リモートコンパクション**: 別のエンドポイントに要約を委任
+
+### コンパクションのトリガー条件
+
+```rust
+let auto_compact_limit = model_info
+    .auto_compact_token_limit()
+    .unwrap_or(i64::MAX);
+```
+{/* source: codex-rs/core/src/codex.rs:L4844 */}
+
+モデルの `auto_compact_token_limit` を超過した場合に自動的にコンパクションが実行される。これによりコンテキストウィンドウを効率的に活用しつつ、重要な情報を維持する。
+
+## ターンのライフサイクルイベント
+
+ターンの進行中、フロントエンドには以下のイベントが順次送信される。
+
+| イベント | タイミング | 内容 |
+|---------|-----------|------|
+| `TurnStarted` | ターン開始時 | モデル・コンテキストウィンドウサイズ |
+| `AgentMessageDelta` | ストリーミング中 | テキスト出力の差分 |
+| `ExecCommandBegin` | ツール実行前 | 実行予定のコマンド |
+| `ExecApprovalRequest` | 承認が必要な時 | ユーザーに承認を求める |
+| `ExecCommandOutputDelta` | コマンド実行中 | コマンド出力の差分 |
+| `ExecCommandEnd` | コマンド完了後 | 実行結果 |
+| `TokenCount` | ターン終了時 | トークン使用量の更新 |
+| `TurnComplete` | ターン完了時 | 最終ステータス |

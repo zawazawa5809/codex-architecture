@@ -1,0 +1,55 @@
+---
+import { useTranslation, type Lang } from "../i18n/utils";
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = "ja" } = Astro.props;
+const t = useTranslation(lang);
+---
+
+<footer class="border-t border-[var(--color-border)] bg-[var(--color-bg-primary)]">
+  <div class="mx-auto max-w-7xl px-4 py-12">
+    <div class="grid gap-8 md:grid-cols-3">
+      <div>
+        <h3 class="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">
+          AI Agent Architecture Atlas
+        </h3>
+        <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
+          {t("footer.license")}
+        </p>
+      </div>
+
+      <div>
+        <h3 class="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">License</h3>
+        <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
+          Code snippets from Codex CLI are used under the
+          <a
+            href="https://www.apache.org/licenses/LICENSE-2.0"
+            class="text-[var(--color-accent-cyan)] hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Apache License 2.0
+          </a>. This site is an independent educational resource and is not affiliated with or
+          endorsed by OpenAI.
+        </p>
+      </div>
+
+      <div>
+        <h3 class="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">NOTICE</h3>
+        <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
+          Portions of analyzed code include components from Ratatui and Meriyah, used under their
+          respective licenses. See the
+          <a href="/NOTICE" class="text-[var(--color-accent-cyan)] hover:underline">NOTICE</a> file
+          for full attribution.
+        </p>
+      </div>
+    </div>
+
+    <div class="mt-8 border-t border-[var(--color-border)] pt-6 text-center text-xs text-[var(--color-text-muted)]">
+      &copy; {new Date().getFullYear()} AI Agent Architecture Atlas. Educational use only.
+    </div>
+  </div>
+</footer>

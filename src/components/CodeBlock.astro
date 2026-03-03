@@ -1,0 +1,71 @@
+---
+interface Props {
+  title: string;
+  sourcePath: string;
+  lang?: string;
+  collapsible?: boolean;
+}
+
+const { title, sourcePath, lang = "rust", collapsible = true } = Astro.props;
+const id = `code-${title.replace(/\W/g, "-").toLowerCase()}`;
+---
+
+<div class="group my-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-code)]">
+  {
+    collapsible ? (
+      <button
+        class="flex w-full items-center justify-between px-4 py-3 text-left"
+        aria-expanded="false"
+        aria-controls={id}
+        data-code-toggle
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-medium text-[var(--color-accent-cyan)]">{title}</span>
+          <span class="text-[10px] text-[var(--color-text-muted)]">{sourcePath}</span>
+        </div>
+        <svg
+          class="h-4 w-4 text-[var(--color-text-muted)] transition-transform duration-200"
+          data-chevron
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+    ) : (
+      <div class="flex items-center gap-2 px-4 py-3">
+        <span class="text-xs font-medium text-[var(--color-accent-cyan)]">{title}</span>
+        <span class="text-[10px] text-[var(--color-text-muted)]">{sourcePath}</span>
+      </div>
+    )
+  }
+
+  <div
+    id={id}
+    class:list={[
+      "overflow-hidden border-t border-[var(--color-border)]",
+      { hidden: collapsible },
+    ]}
+  >
+    <div class="overflow-x-auto p-4">
+      <slot />
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll("[data-code-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = document.getElementById(btn.getAttribute("aria-controls")!);
+      if (!target) return;
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      btn.setAttribute("aria-expanded", String(!expanded));
+      target.classList.toggle("hidden");
+      const chevron = btn.querySelector("[data-chevron]");
+      if (chevron) {
+        chevron.classList.toggle("rotate-180");
+      }
+    });
+  });
+</script>

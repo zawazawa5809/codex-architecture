@@ -1,0 +1,223 @@
+---
+title: "設計パターンまとめ"
+order: 8
+description: "Codex CLIから学ぶ6つの転用可能な設計パターンと汎用的な応用例"
+---
+
+## 転用可能な設計パターン
+
+Codex CLI のアーキテクチャから抽出できる 6 つの設計パターンを紹介する。これらは AI エージェントに限らず、幅広いソフトウェアシステムで応用可能である。
+
+## 1. SQ/EQ パターン (フロントエンド/バックエンド分離プロトコル)
+
+### パターンの概要
+
+ユーザー側からの操作要求 (**Submission Queue**) とバックエンド側からのイベント通知 (**Event Queue**) を非同期メッセージとして分離するパターン。
+
+```rust
+// Submission: ユーザー → バックエンド
+pub struct Submission {
+    pub id: String,
+    pub op: Op,
+}
+
+// Event: バックエンド → ユーザー
+pub enum EventMsg {
+    TurnStarted(TurnStartedEvent),
+    AgentMessageDelta(AgentMessageDeltaEvent),
+    ExecApprovalRequest(ExecApprovalRequestEvent),
+    TurnComplete(TurnCompleteEvent),
+    // ...
+}
+```
+
+### 設計のポイント
+
+- 各 Submission に一意の ID を付与し、対応する Event と紐付ける
+- Op enum のバリアントで操作の種類を型安全に定義
+- `serde` + `JsonSchema` で言語間の型整合性を保証
+
+### 汎用的な応用例
+
+- **マイクロサービス間通信**: リクエスト/イベントの分離で疎結合化
+- **IDE プラグインアーキテクチャ**: Language Server Protocol (LSP) のような双方向通信
+- **リアルタイムコラボレーション**: 操作の送信とイベントの受信を分離
+
+## 2. Trait-based Tool Registration (拡張可能なプラグインシステム)
+
+### パターンの概要
+
+trait を定義してプラグインの契約を明確化し、HashMap ベースのレジストリでディスパッチするパターン。
+
+```rust
+#[async_trait]
+pub trait ToolHandler: Send + Sync {
+    fn kind(&self) -> ToolKind;
+    async fn is_mutating(&self, invocation: &ToolInvocation) -> bool;
+    async fn handle(&self, invocation: ToolInvocation)
+        -> Result<ToolOutput, FunctionCallError>;
+}
+
+pub struct ToolRegistry {
+    handlers: HashMap<String, Arc<dyn ToolHandler>>,
+}
+```
+
+### 設計のポイント
+
+- `Send + Sync` 境界で非同期・並列環境での安全性を保証
+- `Arc<dyn ToolHandler>` で所有権を共有し、ランタイムにディスパッチ
+- Builder パターンで登録時のバリデーションを集約
+
+### 汎用的な応用例
+
+- **Web フレームワークのミドルウェア**: ハンドラーの動的登録
+- **ゲームエンジンのコンポーネントシステム**: エンティティに動的にコンポーネントを追加
+- **CI/CD パイプラインのステップ定義**: 各ステップを trait で抽象化
+
+## 3. Defense-in-Depth Sandbox (多層防御)
+
+### パターンの概要
+
+単一のセキュリティ機構に依存せず、複数の独立した防御層を組み合わせるパターン。
+
+```
+┌───────────────────────────────────────┐
+│ Layer 1: 承認システム (AskForApproval) │
+├───────────────────────────────────────┤
+│ Layer 2: 実行ポリシー (ExecPolicy)     │
+├───────────────────────────────────────┤
+│ Layer 3: FS 隔離 (bubblewrap/Seatbelt)│
+├───────────────────────────────────────┤
+│ Layer 4: syscall 制限 (seccomp)       │
+├───────────────────────────────────────┤
+│ Layer 5: ネットワーク制御 (Proxy)      │
+├───────────────────────────────────────┤
+│ Layer 6: プロセスハードニング          │
+└───────────────────────────────────────┘
+```
+
+### 設計のポイント
+
+- 各層が独立して機能し、一層が突破されても他層が防御を維持
+- プラットフォーム抽象化 (`SandboxType` enum) でクロスプラットフォーム対応
+- `WritableRoot` + `read_only_subpaths` でエージェント権限昇格を防止
+
+### 汎用的な応用例
+
+- **マルチテナント SaaS**: テナント間のデータ隔離
+- **コンテナオーケストレーション**: Pod セキュリティポリシー
+- **ブラウザ拡張機能**: コンテンツスクリプトの権限制限
+
+## 4. Context Window Management (コンテキスト管理)
+
+### パターンの概要
+
+有限のリソース（トークン数）を効率的に管理するために、自動的に不要な情報を圧縮・要約するパターン。
+
+```rust
+// トークン使用量がしきい値を超えた場合に自動コンパクション
+let auto_compact_limit = model_info
+    .auto_compact_token_limit()
+    .unwrap_or(i64::MAX);
+
+// コンパクション戦略の選択
+pub(crate) fn should_use_remote_compact_task(
+    provider: &ModelProviderInfo,
+) -> bool { /* ... */ }
+```
+
+### 設計のポイント
+
+- しきい値ベースの自動トリガー
+- インライン/リモートの 2 つのコンパクション戦略
+- プレサンプリングコンパクションで API 呼び出し前に空間を確保
+
+### 汎用的な応用例
+
+- **ログ管理**: ログローテーション・要約
+- **チャットアプリケーション**: メッセージ履歴の圧縮
+- **キャッシュシステム**: LRU + 要約ベースのエビクション
+
+## 5. Approval Escalation (段階的承認)
+
+### パターンの概要
+
+操作のリスクレベルに応じて承認の粒度を段階的に変えるパターン。
+
+```rust
+// 1. ポリシーに基づく自動判定
+match requirement {
+    ExecApprovalRequirement::Skip { .. } => { /* 自動承認 */ }
+    ExecApprovalRequirement::Forbidden { .. } => { /* 拒否 */ }
+    ExecApprovalRequirement::NeedsApproval { .. } => {
+        // 2. ユーザーに承認を要求
+    }
+}
+
+// 3. サンドボックス失敗時のエスカレーション
+// サンドボックスなしでの再試行を提案
+```
+
+### 設計のポイント
+
+- 3 段階の承認レベル (自動 → 確認 → 拒否)
+- サンドボックス失敗時の自動エスカレーション
+- 承認結果のルール化（次回からの自動承認提案）
+
+### 汎用的な応用例
+
+- **金融システム**: 取引金額に応じた承認フロー
+- **DevOps**: デプロイ対象環境に応じた承認（dev は自動、prod は手動）
+- **権限管理**: 操作のリスクに応じた多要素認証の要求
+
+## 6. Process Hardening (プロセス強化)
+
+### パターンの概要
+
+子プロセスの生成時に、OS レベルのセキュリティ機構を適用してプロセスの権限を最小化するパターン。
+
+```rust
+// Linux
+fn set_no_new_privs() -> Result<()> {
+    unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) };
+    Ok(())
+}
+
+// bubblewrap flags
+args.push("--new-session".to_string());  // シグナル隔離
+args.push("--die-with-parent".to_string());  // 孤児防止
+args.push("--unshare-pid".to_string());  // PID 隔離
+args.push("--unshare-net".to_string());  // ネットワーク隔離
+
+// macOS
+const MACOS_PATH_TO_SEATBELT_EXECUTABLE: &str =
+    "/usr/bin/sandbox-exec";  // PATH インジェクション防止
+```
+
+### 設計のポイント
+
+- `PR_SET_NO_NEW_PRIVS` で権限昇格を不可能にする
+- `--die-with-parent` でゾンビプロセスを防止
+- 信頼されたパスのみを使用（`/usr/bin/sandbox-exec`）
+
+### 汎用的な応用例
+
+- **コンテナランタイム**: OCI コンテナのセキュリティプロファイル
+- **Web ブラウザ**: レンダラープロセスのサンドボックス化
+- **CI ランナー**: ビルドジョブの隔離実行
+
+## まとめ
+
+これらの 6 つのパターンは、Codex CLI という具体的な実装から抽出されたものだが、その適用範囲は AI コーディングエージェントに限定されない。特に以下の文脈で有用である。
+
+| パターン | 主な適用場面 |
+|---------|------------|
+| SQ/EQ | 非同期通信・UI 分離 |
+| Trait-based Registration | プラグインシステム |
+| Defense-in-Depth | セキュリティ設計 |
+| Context Management | リソース制約下の情報管理 |
+| Approval Escalation | リスクベースの承認フロー |
+| Process Hardening | プロセスセキュリティ |
+
+ソフトウェア設計において、既存のオープンソースプロジェクトから設計パターンを学び、自身のプロジェクトに適用することは、品質と生産性の両面で大きな効果をもたらす。
