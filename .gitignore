@@ -7,5 +7,6 @@ dist/
 .DS_Store
 codex-source/
 *.png
+!public/og-default.png
 *.jpeg
 .plans/

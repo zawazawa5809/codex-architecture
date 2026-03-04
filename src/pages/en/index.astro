@@ -15,7 +15,7 @@ const t = useTranslation(lang);
     </div>
 
     <div class="relative mx-auto max-w-5xl px-4 text-center">
-      <h1 class="mb-4 text-5xl font-bold tracking-tight md:text-6xl">
+      <h1 class="hero-enter mb-4 text-5xl font-bold tracking-tight md:text-6xl">
         <span class="text-[var(--color-text-primary)]">AI Agent Architecture</span>
         <br />
         <span class="bg-gradient-to-r from-[var(--color-accent-indigo)] to-[var(--color-accent-cyan)] bg-clip-text text-transparent">
@@ -23,16 +23,16 @@ const t = useTranslation(lang);
         </span>
       </h1>
 
-      <p class="mx-auto mb-12 max-w-2xl text-lg text-[var(--color-text-secondary)]">
+      <p class="hero-enter-delay-1 mx-auto mb-12 max-w-2xl text-lg text-[var(--color-text-secondary)]">
         {t("site.description")}
       </p>
 
       <!-- Tool Cards -->
-      <div class="mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
+      <div class="hero-enter-delay-3 mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
         <!-- Codex CLI Card (Active) -->
         <a
           href={getLocalePath(lang, "/codex")}
-          class="group relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 text-left transition-all hover:border-[var(--color-accent-indigo)] hover:bg-white/[0.04] hover:shadow-lg hover:shadow-[var(--color-accent-indigo)]/10"
+          class="card-hover group relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 text-left hover:border-[var(--color-accent-indigo)] hover:bg-white/[0.04]"
         >
           <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--color-accent-emerald)]/10 px-3 py-1">
             <span class="h-2 w-2 rounded-full bg-[var(--color-accent-emerald)]"></span>

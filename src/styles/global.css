@@ -47,8 +47,8 @@
   /* Grid background pattern */
   .bg-grid {
     background-image:
-      linear-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
+      linear-gradient(color-mix(in srgb, var(--color-accent-indigo) 4%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--color-accent-indigo) 4%, transparent) 1px, transparent 1px);
     background-size: 48px 48px;
   }
 }
@@ -126,7 +126,7 @@
 
 .card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px -8px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 8px 32px -8px color-mix(in srgb, var(--color-accent-indigo) 15%, transparent);
 }
 
 /* Prose overrides for dark theme */

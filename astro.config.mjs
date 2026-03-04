@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   site: "https://zawazawa5809.github.io",
   base: "/codex-architectuer",
+  compressHTML: true,
   integrations: [react(), mdx()],
   markdown: {
     shikiConfig: {
