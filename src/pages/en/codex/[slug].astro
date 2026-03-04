@@ -69,8 +69,8 @@ const diagramBorderClass = section.accent === "rose"
 
   {/* Primary diagram */}
   {section.diagram && (
-    <div class={`mb-10 overflow-x-auto rounded-xl border ${diagramBorderClass} bg-white/[0.02] p-6`}>
-      <div class="min-w-[600px]">
+    <div class={`mb-10 overflow-x-auto rounded-xl border ${diagramBorderClass} bg-white/[0.02] p-6`} style="touch-action: pinch-zoom">
+      <div>
         {section.diagram === "ArchitectureOverview" && <ArchitectureOverview client:visible />}
         {section.diagram === "AgentLoop" && <AgentLoop client:visible />}
         {section.diagram === "ToolSystem" && <ToolSystem client:visible />}
@@ -82,11 +82,11 @@ const diagramBorderClass = section.accent === "rose"
 
   {/* Extra diagram */}
   {section.extraDiagram && (
-    <div class="mb-8 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+    <div class="mb-8 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6" style="touch-action: pinch-zoom">
       <h2 class="mb-4 text-lg font-semibold text-[var(--color-accent-cyan)]">
         {section.extraDiagramLabel?.[lang]}
-      </h3>
-      <div class="min-w-[600px]">
+      </h2>
+      <div>
         {section.extraDiagram === "SqEqAnimation" && <SqEqAnimation client:visible />}
       </div>
     </div>

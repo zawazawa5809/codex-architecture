@@ -95,3 +95,10 @@
 .glow-active {
   animation: glow 2s ease-in-out infinite;
 }
+
+/* Mobile diagram adjustments */
+@media (max-width: 640px) {
+  .diagram-node {
+    cursor: default;
+  }
+}

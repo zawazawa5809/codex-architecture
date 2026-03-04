@@ -36,6 +36,14 @@
     background: color-mix(in srgb, var(--color-accent-indigo) 40%, transparent);
   }
 
+  /* Focus visible ring for keyboard navigation */
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--color-accent-indigo);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
   /* Grid background pattern */
   .bg-grid {
     background-image:
@@ -169,5 +177,21 @@
 
   ::-webkit-scrollbar-thumb:hover {
     background: var(--color-text-muted);
+  }
+
+  /* Mobile typography adjustments */
+  @media (max-width: 640px) {
+    .prose-dark h1 {
+      font-size: 1.5rem;
+    }
+    .prose-dark h2 {
+      font-size: 1.25rem;
+    }
+    .prose-dark h3 {
+      font-size: 1.1rem;
+    }
+    .prose {
+      font-size: 0.9375rem;
+    }
   }
 }

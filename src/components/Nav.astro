@@ -16,6 +16,7 @@ const navItems = codexSections.map((section) => ({
   slug: section.slug,
   label: t(section.navKey as any),
   href: getLocalePath(lang, `/codex/${section.slug}`),
+  number: section.number,
 }));
 ---
 
@@ -74,7 +75,7 @@ const navItems = codexSections.map((section) => ({
   {/* Mobile menu panel */}
   <div
     id="mobile-menu"
-    class="hidden border-t border-[var(--color-border)] bg-[var(--color-bg-primary)]/95 backdrop-blur-xl lg:hidden"
+    class="mobile-menu-panel max-h-0 overflow-hidden border-t border-[var(--color-border)] bg-[var(--color-bg-primary)]/95 backdrop-blur-xl lg:hidden"
   >
     <div class="space-y-1 px-4 py-3">
       {
@@ -84,12 +85,22 @@ const navItems = codexSections.map((section) => ({
             <a
               href={item.href}
               class:list={[
-                "mobile-nav-link nav-link block rounded-md px-3 py-2 text-sm transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
+                "mobile-nav-link nav-link flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
                 isActive
-                  ? "text-[var(--color-accent-cyan)]"
+                  ? "border-l-2 border-[var(--color-accent-cyan)] bg-[var(--color-accent-indigo)]/10 text-[var(--color-accent-cyan)]"
                   : "text-[var(--color-text-secondary)]",
               ]}
             >
+              <span
+                class:list={[
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded font-mono text-[10px]",
+                  isActive
+                    ? "bg-[var(--color-accent-indigo)]/20 text-[var(--color-accent-indigo)]"
+                    : "bg-white/5 text-[var(--color-text-muted)]",
+                ]}
+              >
+                {item.number}
+              </span>
               {item.label}
             </a>
           );
@@ -108,14 +119,14 @@ const navItems = codexSections.map((section) => ({
   const mobileLinks = document.querySelectorAll<HTMLAnchorElement>(".mobile-nav-link");
 
   function toggleMenu() {
-    const isOpen = menu?.classList.toggle("hidden") === false;
-    menuBtn?.setAttribute("aria-expanded", String(isOpen));
-    hamburgerIcon?.classList.toggle("hidden", isOpen);
+    const isOpen = menu?.classList.toggle("mobile-menu-open");
+    menuBtn?.setAttribute("aria-expanded", String(!!isOpen));
+    hamburgerIcon?.classList.toggle("hidden", !!isOpen);
     closeIcon?.classList.toggle("hidden", !isOpen);
   }
 
   function closeMenu() {
-    menu?.classList.add("hidden");
+    menu?.classList.remove("mobile-menu-open");
     menuBtn?.setAttribute("aria-expanded", "false");
     hamburgerIcon?.classList.remove("hidden");
     closeIcon?.classList.add("hidden");
@@ -128,7 +139,7 @@ const navItems = codexSections.map((section) => ({
 
   // Close on Escape key
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !menu?.classList.contains("hidden")) {
+    if (e.key === "Escape" && menu?.classList.contains("mobile-menu-open")) {
       closeMenu();
     }
   });
@@ -136,8 +147,24 @@ const navItems = codexSections.map((section) => ({
   // Close on outside click
   const nav = document.getElementById("main-nav");
   document.addEventListener("click", (e) => {
-    if (nav && !nav.contains(e.target as Node) && !menu?.classList.contains("hidden")) {
+    if (nav && !nav.contains(e.target as Node) && menu?.classList.contains("mobile-menu-open")) {
       closeMenu();
     }
   });
 </script>
+
+<style>
+  .mobile-menu-panel {
+    max-height: 0;
+    opacity: 0;
+    visibility: hidden;
+    transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out, visibility 0s 0.3s;
+  }
+
+  .mobile-menu-panel.mobile-menu-open {
+    max-height: 80vh;
+    opacity: 1;
+    visibility: visible;
+    transition: max-height 0.3s ease-in-out, opacity 0.2s ease-in-out, visibility 0s 0s;
+  }
+</style>

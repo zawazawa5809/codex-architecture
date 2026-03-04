@@ -44,4 +44,47 @@ test.describe("Mobile responsive layout", () => {
     await page.waitForURL("**/codex/**");
     expect(page.url()).toContain("/codex/");
   });
+
+  test("sidebar is hidden on mobile", async ({ page }) => {
+    await page.goto("./codex/overview");
+    await page.waitForLoadState("networkidle");
+
+    const sidebar = page.locator("aside");
+    await expect(sidebar).toBeHidden();
+  });
+
+  test("content has no horizontal overflow on mobile", async ({ page }) => {
+    await page.goto("./codex/overview");
+    await page.waitForLoadState("networkidle");
+
+    const hasHorizontalScroll = await page.evaluate(() => {
+      return document.documentElement.scrollWidth > document.documentElement.clientWidth;
+    });
+    expect(hasHorizontalScroll).toBe(false);
+  });
+});
+
+test.describe("Tablet responsive layout (768px)", () => {
+  test.use({ viewport: { width: 768, height: 1024 } });
+
+  test("sidebar is hidden on tablet", async ({ page }) => {
+    await page.goto("./codex/overview");
+    await page.waitForLoadState("networkidle");
+
+    const sidebar = page.locator("aside");
+    await expect(sidebar).toBeHidden();
+  });
+
+  test("hamburger menu works on tablet", async ({ page }) => {
+    await page.goto("./codex/overview");
+    await page.waitForLoadState("networkidle");
+
+    const hamburgerBtn = page.locator("#mobile-menu-btn");
+    await expect(hamburgerBtn).toBeVisible();
+
+    await hamburgerBtn.click();
+    const mobileMenu = page.locator("#mobile-menu");
+    // Menu should become visible (check it's not hidden)
+    await expect(mobileMenu).toBeVisible();
+  });
 });

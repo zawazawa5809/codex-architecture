@@ -48,15 +48,16 @@ const rows = [
 
 <div class="overflow-x-auto rounded-lg border border-[var(--color-border)]">
   <table class="w-full text-sm">
+    <caption class="sr-only">{lang === "ja" ? "Codex CLI と Claude Code の機能比較" : "Feature comparison between Codex CLI and Claude Code"}</caption>
     <thead>
       <tr class="border-b border-[var(--color-border)] bg-[var(--color-bg-code)]">
-        <th class="px-4 py-3 text-left text-xs font-medium text-[var(--color-text-muted)]">
+        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-[var(--color-text-muted)]">
           {lang === "ja" ? "項目" : "Feature"}
         </th>
-        <th class="px-4 py-3 text-left text-xs font-medium text-[var(--color-accent-indigo)]">
+        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-[var(--color-accent-indigo)]">
           Codex CLI
         </th>
-        <th class="px-4 py-3 text-left text-xs font-medium text-[var(--color-accent-cyan)]">
+        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-[var(--color-accent-cyan)]">
           Claude Code
         </th>
       </tr>
@@ -70,7 +71,7 @@ const rows = [
               { "bg-white/[0.02]": i % 2 === 1 },
             ]}
           >
-            <td class="px-4 py-3 font-medium text-[var(--color-text-primary)]">{row.category}</td>
+            <td scope="row" class="px-4 py-3 font-medium text-[var(--color-text-primary)]">{row.category}</td>
             <td class="whitespace-pre-line px-4 py-3 text-[var(--color-text-secondary)]">{row.codex}</td>
             <td class="whitespace-pre-line px-4 py-3 text-[var(--color-text-secondary)]">{row.claude}</td>
           </tr>

@@ -27,7 +27,7 @@ const basePath = getBasePath();
         <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
           {t("footer.licenseBody")}
         </p>
-        <a href="https://www.apache.org/licenses/LICENSE-2.0" class="mt-2 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+        <a href="https://www.apache.org/licenses/LICENSE-2.0" class="mt-2 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer" aria-label="Apache License 2.0 (opens in new tab)">
           {t("footer.viewLicense")}
         </a>
       </div>
@@ -37,7 +37,7 @@ const basePath = getBasePath();
         <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
           {t("footer.noticeBody")}
         </p>
-        <a href={`${basePath}/NOTICE`} class="mt-2 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
+        <a href={`${basePath}/NOTICE`} class="mt-2 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline" aria-label="NOTICE file">
           {t("footer.viewNotice")}
         </a>
       </div>
