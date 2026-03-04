@@ -10,3 +10,8 @@ codex-source/
 !public/og-default.png
 *.jpeg
 .plans/
+.agent/
+.agents/
+.claude/
+test-results/
+skills-lock.json
