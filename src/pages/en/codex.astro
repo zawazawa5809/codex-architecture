@@ -1,30 +1,11 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import Hero from "../../components/Hero.astro";
-import ComparisonTable from "../../components/ComparisonTable.astro";
-import { useTranslation, getLocalePath, getBasePath, type Lang } from "../../i18n/utils";
-
-// Diagram components (React Islands) — no translated text, usable as-is
-import ArchitectureOverview from "../../diagrams/ArchitectureOverview.tsx";
-import AgentLoop from "../../diagrams/AgentLoop.tsx";
-import ToolSystem from "../../diagrams/ToolSystem.tsx";
-import SandboxFlow from "../../diagrams/SandboxFlow.tsx";
-import ApprovalFlow from "../../diagrams/ApprovalFlow.tsx";
-import SqEqAnimation from "../../diagrams/SqEqAnimation.tsx";
-
-// MDX Content (English)
-import Overview from "../../content/en/codex/01-overview.mdx";
-import AgentLoopContent from "../../content/en/codex/02-agent-loop.mdx";
-import ToolSystemContent from "../../content/en/codex/03-tool-system.mdx";
-import SandboxContent from "../../content/en/codex/04-sandbox.mdx";
-import ApprovalContent from "../../content/en/codex/05-approval.mdx";
-import ConfigContent from "../../content/en/codex/06-config.mdx";
-import ComparisonContent from "../../content/en/codex/07-comparison.mdx";
-import TakeawaysContent from "../../content/en/codex/08-takeaways.mdx";
+import { useTranslation, getLocalePath, type Lang } from "../../i18n/utils";
+import { codexSections } from "../../data/codex-sections";
 
 const lang = "en" as Lang;
 const t = useTranslation(lang);
-const basePath = getBasePath();
 
 const whyCards = [
   {
@@ -46,6 +27,10 @@ const whyCards = [
     color: "var(--color-accent-emerald)",
   },
 ];
+
+function sectionUrl(slug: string): string {
+  return getLocalePath(lang, `/codex/${slug}`);
+}
 ---
 
 <BaseLayout title={`Codex CLI — ${t("site.title")}`} description={t("site.description")} lang={lang}>
@@ -78,156 +63,43 @@ const whyCards = [
     </div>
   </section>
 
-  {/* Section 1: Architecture Overview */}
-  <section id="overview" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">1</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Architecture Overview</h2>
-      </div>
-
-      <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-        <div class="min-w-[600px]">
-          <ArchitectureOverview client:visible />
-        </div>
-      </div>
-
-      <div class="mb-8 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-        <h3 class="mb-4 text-lg font-semibold text-[var(--color-accent-cyan)]">SQ/EQ Message Flow</h3>
-        <div class="min-w-[600px]">
-          <SqEqAnimation client:visible />
-        </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <Overview />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 2: Agent Loop */}
-  <section id="agent-loop" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">2</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Agent Loop</h2>
-      </div>
-
-      <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-        <div class="min-w-[600px]">
-          <AgentLoop client:visible />
-        </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <AgentLoopContent />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 3: Tool System */}
-  <section id="tool-system" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">3</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Tool System</h2>
-      </div>
-
-      <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-        <div class="min-w-[600px]">
-          <ToolSystem client:visible />
-        </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ToolSystemContent />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 4: Sandbox Security */}
-  <section id="sandbox" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-rose)]/20 font-mono text-sm text-[var(--color-accent-rose)]">4</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Sandbox Security</h2>
-        <span class="rounded-full bg-[var(--color-accent-rose)]/10 px-3 py-1 text-xs text-[var(--color-accent-rose)]">Core Content</span>
-      </div>
-
-      <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-accent-rose)]/20 bg-white/[0.02] p-6">
-        <div class="min-w-[600px]">
-          <SandboxFlow client:visible />
-        </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <SandboxContent />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 5: Approval System */}
-  <section id="approval" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">5</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Approval System</h2>
-      </div>
-
-      <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-        <div class="min-w-[600px]">
-          <ApprovalFlow client:visible />
-        </div>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ApprovalContent />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 6: Configuration */}
-  <section id="config" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">6</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Configuration System</h2>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ConfigContent />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 7: Comparison */}
-  <section id="comparison" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-indigo)]/20 font-mono text-sm text-[var(--color-accent-indigo)]">7</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Tool Comparison</h2>
-      </div>
-
-      <div class="mb-10">
-        <ComparisonTable lang={lang} />
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <ComparisonContent />
-      </div>
-    </div>
-  </section>
-
-  {/* Section 8: Takeaways */}
-  <section id="takeaways" class="border-t border-[var(--color-border)] py-20">
-    <div class="reveal mx-auto max-w-6xl px-4">
-      <div class="mb-8 flex items-center gap-3">
-        <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent-emerald)]/20 font-mono text-sm text-[var(--color-accent-emerald)]">8</span>
-        <h2 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">Design Pattern Takeaways</h2>
-      </div>
-
-      <div class="prose-dark prose prose-lg max-w-none">
-        <TakeawaysContent />
+  {/* Sections Index */}
+  <section class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-4xl px-4">
+      <h2 class="mb-8 text-center text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
+        Sections
+      </h2>
+      <div class="reveal space-y-3">
+        {
+          codexSections.map((section) => {
+            const accentVar = `var(--color-accent-${section.accent})`;
+            return (
+              <a
+                href={sectionUrl(section.slug)}
+                class="card-hover flex items-center gap-4 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-5 hover:border-[var(--color-accent-indigo)]/50 hover:bg-white/[0.04]"
+              >
+                <span
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-sm"
+                  style={`background: color-mix(in srgb, ${accentVar} 20%, transparent); color: ${accentVar}`}
+                >
+                  {section.number}
+                </span>
+                <span class="text-[var(--color-text-primary)]">
+                  {t(section.navKey as any)}
+                </span>
+                {section.badge && (
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[10px]"
+                    style={`background: color-mix(in srgb, ${accentVar} 10%, transparent); color: ${accentVar}`}
+                  >
+                    {section.badge[lang]}
+                  </span>
+                )}
+                <span class="ml-auto text-[var(--color-text-muted)]">&rarr;</span>
+              </a>
+            );
+          })
+        }
       </div>
     </div>
   </section>
@@ -258,11 +130,12 @@ const whyCards = [
           </ul>
         </div>
         <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
-          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">{t("footer.licenseTitle")}</h3>
+          <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">License Notice</h3>
           <p class="text-sm leading-relaxed text-[var(--color-text-secondary)]">
-            {t("footer.licenseBody")}
+            Code snippets referenced on this site are from the OpenAI Codex CLI repository, used under the Apache License 2.0.
+            "OpenAI" and "Codex" are trademarks of their respective owners. This site is an independent educational resource.
           </p>
-          <a href={`${basePath}/NOTICE`} class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
+          <a href={getLocalePath(lang, "/")} class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
             View NOTICE file →
           </a>
         </div>

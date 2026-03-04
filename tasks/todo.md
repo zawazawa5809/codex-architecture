@@ -1,4 +1,4 @@
 # Codex Architecture 教育サイト構築
 
-- [x] github pages公開用の設定を追加したことで、ページ遷移が壊れたので、github pagesとnpm run devの両方で動作するように修正する — 2026-03-04
-- [ ] codexの解説について、1ページに詰め込み過ぎでは?複数ページにしない理由を教えて。複数ページの方が適切なら、修正計画を立てて
+## 未着手
+- [ ] npm → pnpm 移行（lockfile, CI, engines 設定）— 優先度低

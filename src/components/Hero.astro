@@ -1,5 +1,5 @@
 ---
-import { useTranslation, type Lang } from "../i18n/utils";
+import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
 
 interface Props {
   lang?: Lang;
@@ -7,6 +7,7 @@ interface Props {
 
 const { lang = "ja" } = Astro.props;
 const t = useTranslation(lang);
+const ctaHref = getLocalePath(lang, "/codex/overview");
 ---
 
 <section class="relative overflow-hidden pb-20 pt-32">
@@ -43,12 +44,12 @@ const t = useTranslation(lang);
 
     <div class="hero-enter-delay-3 flex justify-center gap-4">
       <a
-        href="#overview"
+        href={ctaHref}
         class="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent-indigo)] px-6 py-3 text-sm font-medium text-white transition-all hover:bg-[var(--color-accent-indigo)]/80 hover:shadow-lg hover:shadow-[var(--color-accent-indigo)]/20"
       >
         {t("hero.cta")}
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"
           ></path>
         </svg>
       </a>

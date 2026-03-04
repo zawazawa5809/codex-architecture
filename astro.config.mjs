@@ -7,6 +7,11 @@ export default defineConfig({
   site: "https://zawazawa5809.github.io",
   base: "/codex-architectuer",
   integrations: [react(), mdx()],
+  markdown: {
+    shikiConfig: {
+      theme: "github-dark-high-contrast",
+    },
+  },
   vite: {
     plugins: [tailwindcss()],
   },

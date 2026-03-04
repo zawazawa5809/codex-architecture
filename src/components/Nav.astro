@@ -1,24 +1,22 @@
 ---
 import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
 import LanguageToggle from "./LanguageToggle.tsx";
+import { codexSections } from "../data/codex-sections";
 
 interface Props {
   lang?: Lang;
+  /** Currently active docs section slug (for highlighting in nav) */
+  currentSlug?: string;
 }
 
-const { lang = "ja" } = Astro.props;
+const { lang = "ja", currentSlug } = Astro.props;
 const t = useTranslation(lang);
 
-const sections = [
-  { id: "overview", label: t("nav.overview") },
-  { id: "agent-loop", label: t("nav.agentLoop") },
-  { id: "tool-system", label: t("nav.toolSystem") },
-  { id: "sandbox", label: t("nav.sandbox") },
-  { id: "approval", label: t("nav.approval") },
-  { id: "config", label: t("nav.config") },
-  { id: "comparison", label: t("nav.comparison") },
-  { id: "takeaways", label: t("nav.takeaways") },
-];
+const navItems = codexSections.map((section) => ({
+  slug: section.slug,
+  label: t(section.navKey as any),
+  href: getLocalePath(lang, `/codex/${section.slug}`),
+}));
 ---
 
 <nav
@@ -33,15 +31,22 @@ const sections = [
 
     <div class="hidden items-center gap-1 lg:flex">
       {
-        sections.map((section) => (
-          <a
-            href={`#${section.id}`}
-            class="nav-link rounded-md px-3 py-1.5 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]"
-            data-section={section.id}
-          >
-            {section.label}
-          </a>
-        ))
+        navItems.map((item) => {
+          const isActive = item.slug === currentSlug;
+          return (
+            <a
+              href={item.href}
+              class:list={[
+                "nav-link rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
+                isActive
+                  ? "text-[var(--color-accent-cyan)]"
+                  : "text-[var(--color-text-secondary)]",
+              ]}
+            >
+              {item.label}
+            </a>
+          );
+        })
       }
     </div>
 
@@ -73,47 +78,28 @@ const sections = [
   >
     <div class="space-y-1 px-4 py-3">
       {
-        sections.map((section) => (
-          <a
-            href={`#${section.id}`}
-            class="mobile-nav-link nav-link block rounded-md px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]"
-            data-section={section.id}
-          >
-            {section.label}
-          </a>
-        ))
+        navItems.map((item) => {
+          const isActive = item.slug === currentSlug;
+          return (
+            <a
+              href={item.href}
+              class:list={[
+                "mobile-nav-link nav-link block rounded-md px-3 py-2 text-sm transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
+                isActive
+                  ? "text-[var(--color-accent-cyan)]"
+                  : "text-[var(--color-text-secondary)]",
+              ]}
+            >
+              {item.label}
+            </a>
+          );
+        })
       }
     </div>
   </div>
 </nav>
 
 <script>
-  // --- Scroll spy ---
-  const navLinks = document.querySelectorAll<HTMLAnchorElement>(".nav-link");
-  const sections = document.querySelectorAll<HTMLElement>("section[id]");
-
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          navLinks.forEach((link) => {
-            link.classList.toggle(
-              "text-[var(--color-accent-cyan)]",
-              link.dataset.section === entry.target.id,
-            );
-            link.classList.toggle(
-              "text-[var(--color-text-secondary)]",
-              link.dataset.section !== entry.target.id,
-            );
-          });
-        }
-      });
-    },
-    { rootMargin: "-20% 0px -70% 0px" },
-  );
-
-  sections.forEach((section) => observer.observe(section));
-
   // --- Mobile menu ---
   const menuBtn = document.getElementById("mobile-menu-btn");
   const menu = document.getElementById("mobile-menu");

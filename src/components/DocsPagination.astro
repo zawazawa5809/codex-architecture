@@ -1,0 +1,55 @@
+---
+import { getAdjacentSections } from "../data/codex-sections";
+import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
+
+interface Props {
+  lang: Lang;
+  currentSlug: string;
+  agentName: string;
+}
+
+const { lang, currentSlug, agentName } = Astro.props;
+const t = useTranslation(lang);
+const { prev, next } = getAdjacentSections(currentSlug);
+
+function sectionUrl(slug: string): string {
+  return getLocalePath(lang, `/${agentName}/${slug}`);
+}
+---
+
+<nav class="mt-12 flex items-center justify-between border-t border-[var(--color-border)] pt-6" aria-label="Pagination">
+  {
+    prev ? (
+      <a
+        href={sectionUrl(prev.slug)}
+        class="group flex flex-col gap-1 text-sm"
+      >
+        <span class="text-xs text-[var(--color-text-muted)]">
+          &larr; {lang === "ja" ? "前のセクション" : "Previous"}
+        </span>
+        <span class="text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
+          {t(prev.navKey as any)}
+        </span>
+      </a>
+    ) : (
+      <span />
+    )
+  }
+  {
+    next ? (
+      <a
+        href={sectionUrl(next.slug)}
+        class="group flex flex-col items-end gap-1 text-sm"
+      >
+        <span class="text-xs text-[var(--color-text-muted)]">
+          {lang === "ja" ? "次のセクション" : "Next"} &rarr;
+        </span>
+        <span class="text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]">
+          {t(next.navKey as any)}
+        </span>
+      </a>
+    ) : (
+      <span />
+    )
+  }
+</nav>

@@ -9,9 +9,10 @@ interface Props {
   title: string;
   description?: string;
   lang?: Lang;
+  currentSlug?: string;
 }
 
-const { title, description = "", lang = "ja" } = Astro.props;
+const { title, description = "", lang = "ja", currentSlug } = Astro.props;
 const basePath = getBasePath();
 
 // Map lang to locale format for OG tags
@@ -60,7 +61,7 @@ const locale = localeMap[lang];
     <title>{title}</title>
   </head>
   <body class="bg-grid min-h-screen antialiased">
-    <Nav lang={lang} />
+    <Nav lang={lang} currentSlug={currentSlug} />
     <main>
       <slot />
     </main>

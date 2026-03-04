@@ -19,7 +19,7 @@ export default function LanguageToggle({ lang }: Props) {
     <button
       onClick={toggle}
       className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent-indigo)] hover:text-[var(--color-text-primary)]"
-      aria-label="Toggle language"
+      aria-label="JP / EN"
     >
       <span className={lang === "ja" ? "text-[var(--color-accent-cyan)]" : ""}>JP</span>
       <span className="text-[var(--color-text-muted)]">/</span>

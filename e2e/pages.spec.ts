@@ -1,10 +1,17 @@
 import { test, expect } from "@playwright/test";
 
+// Paths are relative to Playwright baseURL (http://localhost:4321/codex-architectuer)
+// Use "./" prefix for baseURL-relative resolution
 const pages = [
-  { path: "/", title: "AI Agent Architecture Atlas" },
-  { path: "/codex", title: /Codex CLI.*AI Agent Architecture Atlas/ },
-  { path: "/en", title: "AI Agent Architecture Atlas" },
-  { path: "/en/codex", title: /Codex CLI.*AI Agent Architecture Atlas/ },
+  { path: "./", title: "AI Agent Architecture Atlas" },
+  { path: "./codex", title: /Codex CLI.*AI Agent Architecture Atlas/ },
+  { path: "./en", title: "AI Agent Architecture Atlas" },
+  { path: "./en/codex", title: /Codex CLI.*AI Agent Architecture Atlas/ },
+  // Section pages
+  { path: "./codex/overview", title: /.*Codex CLI/ },
+  { path: "./codex/sandbox", title: /.*Codex CLI/ },
+  { path: "./en/codex/overview", title: /.*Codex CLI/ },
+  { path: "./en/codex/takeaways", title: /.*Codex CLI/ },
 ];
 
 for (const { path, title } of pages) {

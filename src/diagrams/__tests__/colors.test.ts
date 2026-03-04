@@ -33,7 +33,7 @@ describe("COLORS", () => {
   });
 
   it("has the expected color values", () => {
-    expect(COLORS.primary).toBe("#6366f1");
+    expect(COLORS.primary).toBe("#818cf8");
     expect(COLORS.secondary).toBe("#22d3ee");
     expect(COLORS.danger).toBe("#f43f5e");
     expect(COLORS.success).toBe("#10b981");

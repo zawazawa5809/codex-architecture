@@ -1,0 +1,106 @@
+---
+import { getEntry, render } from "astro:content";
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import ComparisonTable from "../../components/ComparisonTable.astro";
+import { useTranslation, type Lang } from "../../i18n/utils";
+import { codexSections, getSectionBySlug, type SectionMeta } from "../../data/codex-sections";
+
+// Diagram components (React Islands)
+import ArchitectureOverview from "../../diagrams/ArchitectureOverview.tsx";
+import AgentLoop from "../../diagrams/AgentLoop.tsx";
+import ToolSystem from "../../diagrams/ToolSystem.tsx";
+import SandboxFlow from "../../diagrams/SandboxFlow.tsx";
+import ApprovalFlow from "../../diagrams/ApprovalFlow.tsx";
+import SqEqAnimation from "../../diagrams/SqEqAnimation.tsx";
+
+const lang = "ja" as Lang;
+
+export function getStaticPaths() {
+  return codexSections.map((section) => ({
+    params: { slug: section.slug },
+    props: { section },
+  }));
+}
+
+interface Props {
+  section: SectionMeta;
+}
+
+const { section } = Astro.props;
+const t = useTranslation(lang);
+
+const entry = await getEntry("codex_ja", section.entryId);
+if (!entry) throw new Error(`Content not found: codex_ja/${section.entryId}`);
+const { Content } = await render(entry);
+
+const accentVar = `var(--color-accent-${section.accent})`;
+const diagramBorderClass = section.accent === "rose"
+  ? "border-[var(--color-accent-rose)]/20"
+  : "border-[var(--color-border)]";
+---
+
+<DocsLayout
+  title={`${entry.data.title} — Codex CLI`}
+  description={entry.data.description}
+  lang={lang}
+  currentSlug={section.slug}
+  agentName="codex"
+>
+  {/* Section header */}
+  <div class="mb-8 flex items-center gap-3">
+    <span
+      class="flex h-8 w-8 items-center justify-center rounded-lg font-mono text-sm"
+      style={`background: color-mix(in srgb, ${accentVar} 20%, transparent); color: ${accentVar}`}
+    >
+      {section.number}
+    </span>
+    <h1 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
+      {entry.data.title}
+    </h1>
+    {section.badge && (
+      <span
+        class="rounded-full px-3 py-1 text-xs"
+        style={`background: color-mix(in srgb, ${accentVar} 10%, transparent); color: ${accentVar}`}
+      >
+        {section.badge[lang]}
+      </span>
+    )}
+  </div>
+
+  {/* Primary diagram */}
+  {section.diagram && (
+    <div class={`mb-10 overflow-x-auto rounded-xl border ${diagramBorderClass} bg-white/[0.02] p-6`}>
+      <div class="min-w-[600px]">
+        {section.diagram === "ArchitectureOverview" && <ArchitectureOverview client:visible />}
+        {section.diagram === "AgentLoop" && <AgentLoop client:visible />}
+        {section.diagram === "ToolSystem" && <ToolSystem client:visible />}
+        {section.diagram === "SandboxFlow" && <SandboxFlow client:visible />}
+        {section.diagram === "ApprovalFlow" && <ApprovalFlow client:visible />}
+      </div>
+    </div>
+  )}
+
+  {/* Extra diagram (SqEq in overview) */}
+  {section.extraDiagram && (
+    <div class="mb-8 overflow-x-auto rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+      <h2 class="mb-4 text-lg font-semibold text-[var(--color-accent-cyan)]">
+        {section.extraDiagramLabel?.[lang]}
+      </h3>
+      <div class="min-w-[600px]">
+        {section.extraDiagram === "SqEqAnimation" && <SqEqAnimation client:visible />}
+      </div>
+    </div>
+  )}
+
+  {/* Comparison table (section 7) */}
+  {section.hasComparisonTable && (
+    <div class="mb-10">
+      <ComparisonTable lang={lang} />
+    </div>
+  )}
+
+  {/* MDX content */}
+  <div class="prose-dark prose prose-lg max-w-none">
+    <Content />
+  </div>
+</DocsLayout>

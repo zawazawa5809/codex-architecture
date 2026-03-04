@@ -1,50 +1,50 @@
 import { test, expect } from "@playwright/test";
 
+const BASE = "/codex-architectuer";
+
 test.describe("Language toggle navigation", () => {
-  test("language toggle on / navigates to /en", async ({ page }) => {
-    await page.goto("/");
+  test("language toggle on index navigates to /en", async ({ page }) => {
+    await page.goto("./");
     await page.waitForLoadState("networkidle");
 
-    const langToggle = page.getByRole("button", { name: /toggle language/i });
+    const langToggle = page.getByRole("button", { name: /JP \/ EN/i });
     await langToggle.click();
 
     await page.waitForURL("**/en**");
     expect(page.url()).toContain("/en");
   });
 
-  test("language toggle on /en navigates back to /", async ({ page }) => {
-    await page.goto("/en");
+  test("language toggle on /en navigates back", async ({ page }) => {
+    await page.goto("./en");
     await page.waitForLoadState("networkidle");
 
-    const langToggle = page.getByRole("button", { name: /toggle language/i });
+    const langToggle = page.getByRole("button", { name: /JP \/ EN/i });
     await langToggle.click();
 
-    await page.waitForURL((url) => !url.pathname.startsWith("/en"));
+    await page.waitForURL((url) => !url.pathname.includes("/en"));
     expect(page.url()).not.toContain("/en");
   });
 });
 
 test.describe("Index page card links", () => {
-  test("Codex CLI card on / navigates to /codex", async ({ page }) => {
-    await page.goto("/");
+  test("Codex CLI card navigates to /codex", async ({ page }) => {
+    await page.goto("./");
     await page.waitForLoadState("networkidle");
 
-    // Find the Codex CLI link card (href contains /codex)
-    const codexLink = page.locator('a[href="/codex"]').first();
+    // Find the Codex CLI link card
+    const codexLink = page.locator(`a[href="${BASE}/codex"]`).first();
     await codexLink.click();
 
     await page.waitForURL("**/codex");
     expect(page.url()).toContain("/codex");
-    // Should not be the EN version
     expect(page.url()).not.toContain("/en/codex");
   });
 
   test("Codex CLI card on /en navigates to /en/codex", async ({ page }) => {
-    await page.goto("/en");
+    await page.goto("./en");
     await page.waitForLoadState("networkidle");
 
-    // Find the Codex CLI link card (href contains /en/codex)
-    const codexLink = page.locator('a[href="/en/codex"]').first();
+    const codexLink = page.locator(`a[href="${BASE}/en/codex"]`).first();
     await codexLink.click();
 
     await page.waitForURL("**/en/codex");
