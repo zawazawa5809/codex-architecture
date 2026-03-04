@@ -1,4 +1,4 @@
-import { type Lang, getLocalePath } from "../i18n/utils";
+import { type Lang, getLocalePath, getBasePath } from "../i18n/utils";
 
 interface Props {
   lang: Lang;
@@ -7,7 +7,11 @@ interface Props {
 export default function LanguageToggle({ lang }: Props) {
   function toggle() {
     const next: Lang = lang === "ja" ? "en" : "ja";
-    const path = window.location.pathname.replace(/^\/(en|ja)/, "") || "/";
+    const basePath = getBasePath();
+    const withoutBase = window.location.pathname.startsWith(basePath)
+      ? window.location.pathname.slice(basePath.length)
+      : window.location.pathname;
+    const path = withoutBase.replace(/^\/(en|ja)/, "") || "/";
     window.location.href = getLocalePath(next, path);
   }
 

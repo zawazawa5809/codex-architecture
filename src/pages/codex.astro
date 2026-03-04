@@ -2,7 +2,7 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import Hero from "../components/Hero.astro";
 import ComparisonTable from "../components/ComparisonTable.astro";
-import { useTranslation, type Lang } from "../i18n/utils";
+import { useTranslation, getBasePath, type Lang } from "../i18n/utils";
 
 // Diagram components (React Islands)
 import ArchitectureOverview from "../diagrams/ArchitectureOverview.tsx";
@@ -24,6 +24,7 @@ import TakeawaysContent from "../content/ja/codex/08-takeaways.mdx";
 
 const lang = (Astro.currentLocale ?? "ja") as Lang;
 const t = useTranslation(lang);
+const basePath = getBasePath();
 
 const whyCards = [
   {
@@ -263,7 +264,7 @@ const whyCards = [
             Apache License 2.0 に基づき使用しています。「OpenAI」「Codex」は各社の商標であり、
             本サイトは独立した教育リソースです。
           </p>
-          <a href="/NOTICE" class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
+          <a href={`${basePath}/NOTICE`} class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
             NOTICE ファイルを表示 →
           </a>
         </div>

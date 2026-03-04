@@ -1,5 +1,5 @@
 ---
-import { useTranslation, type Lang } from "../i18n/utils";
+import { useTranslation, getBasePath, type Lang } from "../i18n/utils";
 
 interface Props {
   lang?: Lang;
@@ -7,6 +7,7 @@ interface Props {
 
 const { lang = "ja" } = Astro.props;
 const t = useTranslation(lang);
+const basePath = getBasePath();
 ---
 
 <footer class="border-t border-[var(--color-border)] bg-[var(--color-bg-primary)]">
@@ -36,7 +37,7 @@ const t = useTranslation(lang);
         <p class="text-xs leading-relaxed text-[var(--color-text-muted)]">
           {t("footer.noticeBody")}
         </p>
-        <a href="/NOTICE" class="mt-2 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
+        <a href={`${basePath}/NOTICE`} class="mt-2 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
           {t("footer.viewNotice")}
         </a>
       </div>

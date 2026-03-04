@@ -102,7 +102,12 @@ export function useTranslation(lang: Lang) {
   };
 }
 
+export function getBasePath(): string {
+  return import.meta.env.BASE_URL.replace(/\/$/, "");
+}
+
 export function getLocalePath(lang: Lang, path: string): string {
-  if (lang === defaultLang) return path;
-  return `/${lang}${path}`;
+  const basePath = getBasePath();
+  if (lang === defaultLang) return `${basePath}${path}`;
+  return `${basePath}/${lang}${path}`;
 }

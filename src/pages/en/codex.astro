@@ -2,7 +2,7 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import Hero from "../../components/Hero.astro";
 import ComparisonTable from "../../components/ComparisonTable.astro";
-import { useTranslation, getLocalePath, type Lang } from "../../i18n/utils";
+import { useTranslation, getLocalePath, getBasePath, type Lang } from "../../i18n/utils";
 
 // Diagram components (React Islands) — no translated text, usable as-is
 import ArchitectureOverview from "../../diagrams/ArchitectureOverview.tsx";
@@ -24,6 +24,7 @@ import TakeawaysContent from "../../content/en/codex/08-takeaways.mdx";
 
 const lang = "en" as Lang;
 const t = useTranslation(lang);
+const basePath = getBasePath();
 
 const whyCards = [
   {
@@ -261,7 +262,7 @@ const whyCards = [
           <p class="text-sm leading-relaxed text-[var(--color-text-secondary)]">
             {t("footer.licenseBody")}
           </p>
-          <a href="/NOTICE" class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
+          <a href={`${basePath}/NOTICE`} class="mt-3 inline-block text-xs text-[var(--color-accent-cyan)] hover:underline">
             View NOTICE file →
           </a>
         </div>
