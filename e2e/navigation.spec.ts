@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const BASE = "/codex-architectuer";
+const BASE = "/codex-architecture";
 
 test.describe("Language toggle navigation", () => {
   test("language toggle on index navigates to /en", async ({ page }) => {

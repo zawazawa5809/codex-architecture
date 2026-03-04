@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   site: "https://zawazawa5809.github.io",
-  base: "/codex-architectuer",
+  base: "/codex-architecture",
   compressHTML: true,
   integrations: [react(), mdx()],
   markdown: {

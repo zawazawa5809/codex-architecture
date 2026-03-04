@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const BASE = "/codex-architectuer";
+const BASE = "/codex-architecture";
 
 export default defineConfig({
   testDir: "./e2e",

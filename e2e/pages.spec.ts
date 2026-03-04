@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// Paths are relative to Playwright baseURL (http://localhost:4321/codex-architectuer)
+// Paths are relative to Playwright baseURL (http://localhost:4321/codex-architecture)
 // Use "./" prefix for baseURL-relative resolution
 const pages = [
   { path: "./", title: "AI Agent Architecture Atlas" },
