@@ -129,8 +129,9 @@
   box-shadow: 0 8px 32px -8px color-mix(in srgb, var(--color-accent-indigo) 15%, transparent);
 }
 
-/* Prose overrides for dark theme */
-@layer components {
+/* Prose overrides for dark theme — must be in utilities layer
+   so it takes priority over the default prose/prose-invert variables */
+@layer utilities {
   .prose-dark {
     --tw-prose-body: var(--color-text-primary);
     --tw-prose-headings: #f1f5f9;
@@ -147,7 +148,9 @@
     --tw-prose-th-borders: var(--color-border);
     --tw-prose-td-borders: var(--color-border);
   }
+}
 
+@layer components {
   /* Code block styling */
   pre {
     border: 1px solid var(--color-border);
