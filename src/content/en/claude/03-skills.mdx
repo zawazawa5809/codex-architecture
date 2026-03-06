@@ -1,0 +1,162 @@
+---
+title: "Skills"
+order: 3
+description: "How to define custom skills, trigger patterns, and execution flow"
+---
+
+{/* Skills System - English */}
+
+## What are Skills?
+
+Skills are **reusable instruction sets** that Claude Code can invoke when specific
+patterns are detected in a conversation. They allow you to encode domain knowledge,
+workflows, and best practices into modular, composable units.
+
+Think of skills as "macros" or "playbooks" — predefined procedures the agent follows
+when a particular situation arises.
+
+## SKILL.md Format
+
+Each skill is defined in a `SKILL.md` file with a specific structure:
+
+```markdown
+---
+name: "deploy"
+description: "Deploy the application to production"
+trigger: "deploy"
+---
+
+# Deploy Workflow
+
+1. Run the test suite: `pnpm run test`
+2. Build the project: `pnpm run build`
+3. Deploy to production: `pnpm run deploy`
+4. Verify the deployment is healthy
+5. Report the deployment URL to the user
+```
+
+### Frontmatter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier for the skill |
+| `description` | Yes | Brief explanation shown in skill listings |
+| `trigger` | No | Pattern or keyword that activates the skill |
+
+## Skill Locations
+
+Skills can be stored at multiple levels:
+
+| Location | Scope |
+|----------|-------|
+| `~/.claude/skills/` | Global — available in all projects |
+| `.claude/skills/` | Project — shared with the team |
+| Subdirectory `.claude/skills/` | Directory-specific |
+
+Claude Code discovers skills by scanning these directories at startup.
+
+## Types of Skills
+
+### Domain Knowledge Skills
+
+These encode understanding about your specific project:
+
+```markdown
+---
+name: "api-conventions"
+description: "API design conventions for this project"
+trigger: "api"
+---
+
+# API Conventions
+
+- All endpoints use REST with JSON
+- Use plural nouns: `/users`, `/posts`
+- Pagination: `?page=1&limit=20`
+- Error format: `{ "error": { "code": "NOT_FOUND", "message": "..." } }`
+- Always validate request body with Zod schemas
+```
+
+### Workflow Skills
+
+These define step-by-step procedures:
+
+```markdown
+---
+name: "new-feature"
+description: "Scaffold a new feature module"
+trigger: "new feature"
+---
+
+# New Feature Workflow
+
+1. Create the feature directory under `src/features/$ARGUMENTS/`
+2. Generate the following files:
+   - `index.ts` — Public API barrel file
+   - `types.ts` — TypeScript interfaces
+   - `service.ts` — Business logic
+   - `service.test.ts` — Unit tests
+3. Register the feature in `src/features/index.ts`
+4. Run tests to verify: `pnpm run test`
+```
+
+## The $ARGUMENTS Variable
+
+Skills can accept dynamic input through the `$ARGUMENTS` placeholder. When a user
+invokes a skill with additional context, that context replaces `$ARGUMENTS`.
+
+```markdown
+---
+name: "component"
+description: "Create a new React component"
+trigger: "create component"
+---
+
+# Create Component: $ARGUMENTS
+
+1. Create `src/components/$ARGUMENTS/$ARGUMENTS.tsx`
+2. Create `src/components/$ARGUMENTS/$ARGUMENTS.test.tsx`
+3. Export from `src/components/index.ts`
+```
+
+**Usage:** "create component UserAvatar" would replace `$ARGUMENTS` with `UserAvatar`.
+
+## Built-in vs Custom Skills
+
+| Aspect | Built-in | Custom |
+|--------|----------|--------|
+| **Source** | Bundled with Claude Code | Created by the user |
+| **Location** | Internal | `.claude/skills/` directories |
+| **Customizable** | No | Fully customizable |
+| **Examples** | Plan mode, code review | Project-specific workflows |
+
+## Execution Flow
+
+When a skill is triggered, the following sequence occurs:
+
+```
+User Message
+    |
+    v
+Pattern Matching (trigger keywords)
+    |
+    v
+Skill SKILL.md loaded into context
+    |
+    v
+$ARGUMENTS replaced with user input
+    |
+    v
+Agent executes the skill instructions
+    |
+    v
+Result returned to conversation
+```
+
+## Best Practices
+
+- **Keep skills focused** — Each skill should do one thing well.
+- **Use descriptive names** — The name should clearly communicate the skill's purpose.
+- **Include verification steps** — Add test or validation steps at the end.
+- **Document assumptions** — State what the skill expects to be true before running.
+- **Use $ARGUMENTS** — Make skills flexible with parameterized inputs.

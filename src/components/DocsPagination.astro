@@ -1,5 +1,5 @@
 ---
-import { getAdjacentSections } from "../data/codex-sections";
+import { getAdjacentForAgent } from "../data/sections-registry";
 import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
 
 interface Props {
@@ -10,7 +10,7 @@ interface Props {
 
 const { lang, currentSlug, agentName } = Astro.props;
 const t = useTranslation(lang);
-const { prev, next } = getAdjacentSections(currentSlug);
+const { prev, next } = getAdjacentForAgent(agentName, currentSlug);
 
 function sectionUrl(slug: string): string {
   return getLocalePath(lang, `/${agentName}/${slug}`);

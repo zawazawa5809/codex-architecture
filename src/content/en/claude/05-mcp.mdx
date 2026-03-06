@@ -1,0 +1,184 @@
+---
+title: "MCP Integration"
+order: 5
+description: "Extending Claude Code with Model Context Protocol servers and tools"
+---
+
+{/* MCP Integration - English */}
+
+## What is MCP?
+
+The **Model Context Protocol (MCP)** is an open standard that allows AI agents to
+connect to external tools and data sources through a unified interface. Claude Code
+acts as an MCP **client**, connecting to one or more MCP **servers** that provide
+additional tools beyond the built-in set.
+
+MCP transforms Claude Code from a standalone coding assistant into an extensible
+platform that can interact with databases, APIs, browsers, and more.
+
+## Architecture
+
+```
+Claude Code (MCP Client)
+    |
+    +-- stdio transport ---> MCP Server A (filesystem)
+    |
+    +-- stdio transport ---> MCP Server B (database)
+    |
+    +-- SSE transport -----> MCP Server C (remote API)
+```
+
+### Components
+
+| Component | Role |
+|-----------|------|
+| **Client** | Claude Code — discovers and invokes tools |
+| **Transport** | Communication channel (stdio or SSE) |
+| **Server** | External process providing tools and resources |
+| **Tools** | Individual capabilities exposed by a server |
+| **Resources** | Read-only data sources exposed by a server |
+
+## Configuration
+
+MCP servers are configured in `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-filesystem"],
+      "env": {}
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-postgres"],
+      "env": {
+        "DATABASE_URL": "postgresql://localhost:5432/mydb"
+      }
+    }
+  }
+}
+```
+
+### Configuration Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `command` | Yes | The executable to launch the server |
+| `args` | No | Command-line arguments |
+| `env` | No | Environment variables for the server process |
+| `cwd` | No | Working directory for the server |
+
+## Transport Types
+
+| Transport | Protocol | Use Case |
+|-----------|----------|----------|
+| **stdio** | stdin/stdout | Local servers, most common |
+| **SSE** | HTTP Server-Sent Events | Remote servers, shared instances |
+
+### stdio (Default)
+
+The server runs as a child process. Communication happens over stdin/stdout
+using JSON-RPC messages. This is the most common and simplest transport.
+
+### SSE (Remote)
+
+For remote servers, configure with a URL:
+
+```json
+{
+  "mcpServers": {
+    "remote-tools": {
+      "url": "https://mcp.example.com/sse"
+    }
+  }
+}
+```
+
+## Tool Discovery
+
+When Claude Code starts, it connects to each configured MCP server and
+discovers available tools. These tools then appear alongside built-in tools.
+
+```
+Startup
+    |
+    v
+Connect to MCP servers
+    |
+    v
+List available tools (tools/list)
+    |
+    v
+Register tools with prefix: mcp__<server>__<tool>
+    |
+    v
+Tools available in agentic loop
+```
+
+Tool names follow the pattern `mcp__<server-name>__<tool-name>`. For example,
+a tool called `query` from a server named `postgres` becomes `mcp__postgres__query`.
+
+## Popular MCP Servers
+
+| Server | Purpose | Tools Provided |
+|--------|---------|---------------|
+| **Filesystem** | File operations | read, write, list, search |
+| **PostgreSQL** | Database queries | query, schema |
+| **Playwright** | Browser automation | navigate, click, screenshot |
+| **Slack** | Messaging | send, read, list channels |
+| **GitHub** | Repository operations | issues, PRs, commits |
+| **Context7** | Library documentation | resolve-library-id, query-docs |
+
+## Security Considerations
+
+MCP servers run with the **same permissions** as Claude Code itself. This means:
+
+- A server can access files, network, and environment variables.
+- Always review server source code before adding it.
+- Use environment variables for secrets — never hardcode credentials.
+- Restrict server permissions where possible.
+
+### Permission Integration
+
+MCP tools follow the same permission model as built-in tools:
+
+| Setting | Effect |
+|---------|--------|
+| Default | User approval required for each MCP tool call |
+| Allowlist | Specific MCP tools auto-approved |
+| Full Auto | All tools (including MCP) run without approval |
+
+## Example: Adding a Documentation Server
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/context7-mcp"],
+      "env": {}
+    }
+  }
+}
+```
+
+Once configured, Claude Code can use documentation lookup tools:
+
+```
+User: "How does React useEffect work?"
+
+Claude Code:
+  1. mcp__context7__resolve-library-id("react")
+  2. mcp__context7__query-docs(library_id, "useEffect")
+  3. Summarize the documentation
+```
+
+## Best Practices
+
+- **Start minimal** — Only add servers you actively need.
+- **Pin versions** — Use specific package versions in `args` for reproducibility.
+- **Isolate secrets** — Pass credentials through `env`, not `args`.
+- **Monitor performance** — Each server adds startup time; keep the list lean.
+- **Prefer stdio** — Use SSE only when a remote server is genuinely needed.

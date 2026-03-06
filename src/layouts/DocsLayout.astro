@@ -15,7 +15,7 @@ interface Props {
 const { title, description = "", lang = "ja", currentSlug, agentName } = Astro.props;
 ---
 
-<BaseLayout title={title} description={description} lang={lang} currentSlug={currentSlug}>
+<BaseLayout title={title} description={description} lang={lang} currentSlug={currentSlug} activeAgent={agentName}>
   <div class="mx-auto max-w-7xl px-3 py-16 sm:px-4 lg:py-24">
     <div class="flex gap-8">
       <DocsSidebar

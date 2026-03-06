@@ -78,6 +78,24 @@ describe("useTranslation", () => {
       expect(en(key)).not.toBe(key);
     }
   });
+
+  it("returns Claude Code nav keys for both languages", () => {
+    const ja = useTranslation("ja");
+    const en = useTranslation("en");
+    const claudeNavKeys = [
+      "nav.claude.overview",
+      "nav.claude.claudeMd",
+      "nav.claude.skills",
+      "nav.claude.hooks",
+      "nav.claude.mcp",
+      "nav.claude.permissions",
+    ] as const;
+
+    for (const key of claudeNavKeys) {
+      expect(ja(key)).not.toBe(key);
+      expect(en(key)).not.toBe(key);
+    }
+  });
 });
 
 describe("getLocalePath", () => {

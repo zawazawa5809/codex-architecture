@@ -1,0 +1,188 @@
+---
+title: "Permissions & Security"
+order: 6
+description: "Understanding Claude Code's permission model, approval flow, and security design"
+---
+
+{/* Permissions and Security - English */}
+
+## Permission Model Overview
+
+Claude Code operates under a **layered permission model** designed to balance
+productivity with safety. Every tool invocation is subject to permission checks,
+and the developer controls how much autonomy the agent has.
+
+The core principle: **nothing runs without explicit or pre-configured approval**.
+
+## Permission Modes
+
+Claude Code supports three permission modes, each offering a different level of autonomy:
+
+| Mode | Description | Approval Required |
+|------|-------------|-------------------|
+| **Default** | Standard interactive mode | Yes, for write operations and commands |
+| **Auto-edit** | File edits auto-approved | Only for shell commands |
+| **Full Auto** | All tools auto-approved | No (use with caution) |
+
+### Default Mode
+
+The safest mode. Claude Code asks for approval before:
+
+- Writing or editing files
+- Running shell commands
+- Invoking MCP tools
+
+Read operations (file read, grep, glob) are allowed without approval.
+
+### Auto-edit Mode
+
+Enables faster iteration by auto-approving file modifications:
+
+```bash
+claude --auto-edit
+```
+
+Shell commands still require explicit approval in this mode.
+
+### Full Auto Mode
+
+All tools run without approval. Intended for trusted, well-tested workflows:
+
+```bash
+claude --full-auto
+```
+
+**Warning:** Full auto mode should only be used in sandboxed environments or
+with well-configured hooks and allowlists.
+
+## Per-Tool Allowlist and Denylist
+
+Fine-grained control is available through tool-level allow and deny lists:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Write",
+      "Edit",
+      "Bash(pnpm run *)",
+      "mcp__context7__query-docs"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(curl *)"
+    ]
+  }
+}
+```
+
+### Permission Format
+
+The allowlist and denylist use a pattern syntax:
+
+| Pattern | Matches |
+|---------|---------|
+| `"Read"` | All Read tool invocations |
+| `"Bash(pnpm run *)"` | Bash commands starting with `pnpm run` |
+| `"Bash(git commit *)"` | Git commit commands only |
+| `"mcp__server__tool"` | Specific MCP tool |
+| `"Bash(*)"` | All bash commands (broad — use carefully) |
+
+The `*` wildcard matches any sequence of characters within the parenthesized argument.
+
+## Settings Hierarchy
+
+Permission settings can be defined at multiple levels:
+
+```
+1. CLI flags           (--full-auto, --auto-edit)
+2. Local settings      (.claude/settings.local.json)
+3. Project settings    (.claude/settings.json)
+4. Global settings     (~/.claude/settings.json)
+```
+
+More specific settings override broader ones. CLI flags have the highest priority.
+
+### settings.json Structure
+
+```json
+{
+  "permissions": {
+    "allow": ["Read", "Grep", "Glob"],
+    "deny": ["Bash(rm -rf *)"]
+  },
+  "hooks": {},
+  "mcpServers": {}
+}
+```
+
+## Approval Flow
+
+When a tool requires approval, the following flow occurs:
+
+```
+Tool Invocation
+    |
+    v
+Check Denylist --> Blocked? --> Deny with reason
+    |
+    v (not blocked)
+Check Allowlist --> Allowed? --> Execute immediately
+    |
+    v (not listed)
+Check Permission Mode
+    |
+    +-- Full Auto --> Execute
+    +-- Auto-edit + Write/Edit --> Execute
+    +-- Default --> Prompt user for approval
+```
+
+## Sandbox and Isolation
+
+Claude Code includes several isolation mechanisms:
+
+| Mechanism | Purpose |
+|-----------|---------|
+| **Directory scoping** | Agent operates within the project directory |
+| **Network awareness** | Shell commands with network access are flagged |
+| **Bash timeout** | Long-running commands are terminated |
+| **Token limits** | Prevents runaway conversations |
+
+## Enterprise Controls
+
+For team and enterprise environments, additional controls are available:
+
+- **Organization-level settings** — Enforce permission policies across all users.
+- **Audit logging** — Track all tool invocations via PostToolUse hooks.
+- **Custom deny lists** — Block specific tools or command patterns org-wide.
+- **Managed CLAUDE.md** — Distribute standard instructions to all projects.
+
+## Best Practices
+
+### For Individual Developers
+
+- **Start with default mode** — Use auto-edit or full-auto only after building trust.
+- **Allowlist incrementally** — Add tools to the allowlist as you verify their safety.
+- **Use hooks for guardrails** — PreToolUse hooks catch what allowlists miss.
+- **Review audit logs** — Periodically check what the agent has been doing.
+
+### For Teams
+
+- **Commit `.claude/settings.json`** — Share permission configurations with the team.
+- **Gitignore `.claude/settings.local.json`** — Keep personal overrides private.
+- **Define deny lists first** — Start restrictive, then open up as needed.
+- **Combine with CI/CD** — Use headless mode (`claude -p`) with locked-down permissions.
+
+### Security Checklist
+
+| Item | Status |
+|------|--------|
+| Deny dangerous shell patterns (`rm -rf`, `curl \| sh`) | Required |
+| Allowlist only needed tools | Recommended |
+| Enable audit logging via hooks | Recommended |
+| Review MCP server permissions | Required |
+| Use sandboxed environments for full-auto | Strongly recommended |
+| Rotate API keys regularly | Required |

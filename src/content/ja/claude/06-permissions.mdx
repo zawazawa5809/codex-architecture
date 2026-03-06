@@ -1,0 +1,177 @@
+---
+title: "権限 & セキュリティ"
+order: 6
+description: "Claude Codeの権限モデル、承認フロー、セキュリティ設計を解説"
+---
+
+{/* 権限とセキュリティ */}
+
+## 権限モード
+
+Claude Codeは3つの権限モードを提供し、自律性と安全性のバランスを調整できる。
+
+| モード | 説明 | 用途 |
+|--------|------|------|
+| **Default** | すべてのツール実行前に承認を要求 | 通常の対話的な開発 |
+| **Auto-edit** | ファイル編集は自動承認、コマンド実行は承認要求 | 信頼されたプロジェクトでの開発 |
+| **Full-auto** | すべてのアクションが自動承認 | CI/CD、自動化パイプライン |
+
+Full-autoモードは `--dangerously-skip-permissions` フラグで有効化される。
+このモードではサンドボックス制限が適用される。
+
+## ツール別の許可・拒否
+
+`settings.json` の `permissions` でツール単位のアクセス制御を設定する。
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(pnpm run *)",
+      "Bash(git status)",
+      "Bash(git diff *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(curl * | bash)",
+      "Write(.env*)"
+    ]
+  }
+}
+```
+
+### パターン記法
+
+権限ルールは `ToolName(pattern)` の形式で記述する。
+
+| 記法 | 説明 | 例 |
+|------|------|-----|
+| `ToolName` | ツール全体を許可/拒否 | `Read`, `Edit` |
+| `ToolName(pattern)` | パターンに一致する操作のみ | `Bash(npm run *)` |
+| `ToolName(path)` | 特定パスへの操作のみ | `Read(./.env)` |
+
+パターンにはglob形式のワイルドカード (`*`) が使用できる。
+
+## 設定の階層と優先順位
+
+設定は4つのレベルで管理され、上位が下位を上書きする。
+
+```
+Managed (組織管理者)        ← 最高優先度
+  |
+Enterprise (企業ポリシー)
+  |
+User (~/.claude/settings.json)
+  |
+Project (.claude/settings.json) ← 最低優先度
+```
+
+### 各レベルの役割
+
+| レベル | 設定者 | 目的 |
+|--------|--------|------|
+| Managed | 組織管理者 | セキュリティポリシーの強制 |
+| Enterprise | IT部門 | 企業全体の標準設定 |
+| User | 個人 | 個人の開発環境カスタマイズ |
+| Project | チーム | プロジェクト固有の設定 |
+
+## サンドボックス
+
+Full-autoモードでは以下のサンドボックス制限が自動適用される。
+
+### ネットワーク制限
+
+- 許可されたドメインへのみアクセス可能
+- デフォルトではローカルホストと npm registry のみ許可
+
+### コマンド制限
+
+```json
+{
+  "sandbox": {
+    "deniedCommands": [
+      "curl * | sh",
+      "wget * -O - | bash",
+      "eval $(curl *)"
+    ]
+  }
+}
+```
+
+## エンタープライズ向けセキュリティ
+
+### disableBypassPermissionsMode
+
+Full-autoモードの使用を禁止する。
+
+```json
+{
+  "managed": {
+    "disableBypassPermissionsMode": true
+  }
+}
+```
+
+この設定が有効な場合、`--dangerously-skip-permissions` フラグは拒否される。
+
+### allowManagedPermissionRulesOnly
+
+ユーザーやプロジェクトレベルでの権限変更を禁止し、
+Managed設定のみを適用する。
+
+```json
+{
+  "managed": {
+    "allowManagedPermissionRulesOnly": true
+  }
+}
+```
+
+### allowManagedHooksOnly
+
+ユーザーやプロジェクトレベルでのHook定義を禁止し、
+Managed設定のHookのみを実行する。
+
+```json
+{
+  "managed": {
+    "allowManagedHooksOnly": true
+  }
+}
+```
+
+## 承認フロー
+
+Default/Auto-editモードでの承認フロー:
+
+```
+Claudeがツール呼び出しを決定
+    |
+    v
+権限チェック (allow/deny リスト)
+    |
+    +--> 明示的に許可 --> 実行
+    |
+    +--> 明示的に拒否 --> ブロック
+    |
+    +--> リストにない --> ユーザーに承認を要求
+                              |
+                              +--> 承認 --> 実行
+                              |
+                              +--> 拒否 --> スキップ
+                              |
+                              +--> 常に許可 --> allowリストに追加して実行
+```
+
+## ベストプラクティス
+
+1. **最小権限の原則** — 必要なツールと操作のみを許可する
+2. **段階的に緩和** — Defaultモードから始め、信頼性を確認しながら緩和する
+3. **denyリストを活用** — 危険な操作は明示的に拒否する
+4. **Managed設定を使う** — チーム全体のセキュリティはManagedレベルで強制する
+5. **Full-autoは限定的に** — CI/CDなど制御された環境でのみ使用する
+6. **定期的に見直す** — 権限設定は定期的に監査し、不要な許可を削除する

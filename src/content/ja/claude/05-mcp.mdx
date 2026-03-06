@@ -1,0 +1,153 @@
+---
+title: "MCP連携"
+order: 5
+description: "Model Context Protocolによるツール拡張、サーバー設定を解説"
+---
+
+{/* MCP (Model Context Protocol) 連携 */}
+
+## MCPとは
+
+**Model Context Protocol (MCP)** は、LLMアプリケーションに外部ツールやデータソースを
+接続するための標準プロトコルである。Claude Codeは MCPクライアントとして動作し、
+MCPサーバーが提供するツールを自身のツールセットに統合する。
+
+## アーキテクチャ
+
+```
+Claude Code (Client)
+    |
+    |--- stdio ---> [ローカル MCP サーバー]
+    |
+    |--- SSE -----> [リモート MCP サーバー]
+    |
+    |--- HTTP ----> [Streamable HTTP サーバー]
+```
+
+MCPはクライアント・サーバーモデルで動作する。
+Claude Codeがクライアントとなり、各サーバーが提供するツールを発見・呼び出す。
+
+## トランスポート
+
+| トランスポート | 説明 | 用途 |
+|--------------|------|------|
+| `stdio` | 標準入出力でプロセス間通信 | ローカルツール（最も一般的） |
+| `sse` | Server-Sent Events によるHTTPストリーミング | リモートサーバー |
+| `streamable-http` | HTTP上の双方向ストリーミング | 新しいリモートサーバー |
+
+## 設定方法
+
+MCPサーバーは `.claude/settings.json` または `.mcp.json` で設定する。
+
+### settings.json での設定
+
+```json
+{
+  "mcpServers": {
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-playwright"]
+    }
+  }
+}
+```
+
+### .mcp.json での設定
+
+プロジェクトルートに `.mcp.json` を配置する方法もある。
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-filesystem", "/path/to/allowed/dir"]
+    }
+  }
+}
+```
+
+## ツール発見と呼び出し
+
+MCPサーバーが起動すると、提供するツールの一覧がClaude Codeに登録される。
+ツール名は `mcp__<server>__<tool>` の形式で利用可能になる。
+
+```
+mcp__context7__resolve-library-id
+mcp__context7__query-docs
+mcp__playwright__browser_navigate
+mcp__playwright__browser_snapshot
+```
+
+Claudeはタスクに応じて適切なMCPツールを自動選択し、呼び出す。
+
+## よく使われるMCPサーバー
+
+| サーバー | 機能 | パッケージ |
+|---------|------|----------|
+| Context7 | ライブラリドキュメントの参照 | `@upstash/context7-mcp` |
+| Playwright | ブラウザの自動操作・テスト | `@anthropic-ai/mcp-playwright` |
+| Filesystem | ファイルシステム操作 | `@anthropic-ai/mcp-filesystem` |
+| Tavily | Web検索・クロール | `tavily-mcp` |
+| Slack | Slackメッセージの送受信 | `@anthropic-ai/mcp-slack` |
+| Linear | Linearのタスク管理 | `mcp-linear` |
+
+## セキュリティ設定
+
+MCPサーバーのアクセス制御は設定ファイルで管理する。
+
+### 許可リスト
+
+```json
+{
+  "permissions": {
+    "allowedMcpServers": ["context7", "playwright"]
+  }
+}
+```
+
+### 拒否リスト
+
+```json
+{
+  "permissions": {
+    "deniedMcpServers": ["filesystem"]
+  }
+}
+```
+
+Managed設定（組織管理者）で `deniedMcpServers` を指定すると、
+ユーザーレベルでの上書きは不可能になる。
+
+## リソースとプロンプト
+
+MCPサーバーはツール以外にも以下を提供できる。
+
+| 機能 | 説明 |
+|------|------|
+| **Resources** | コンテキストとして読み込むデータ（ドキュメント、設定など） |
+| **Prompts** | サーバーが提供する定型プロンプト |
+
+## トラブルシューティング
+
+| 問題 | 対処法 |
+|------|--------|
+| サーバーが起動しない | `npx` のパスやNode.jsバージョンを確認 |
+| ツールが表示されない | `settings.json` の構文エラーを確認 |
+| 接続タイムアウト | リモートサーバーのURLとネットワーク設定を確認 |
+| 権限エラー | `allowedMcpServers` の設定を確認 |
+
+## ベストプラクティス
+
+1. **必要なサーバーのみ有効化** — 不要なサーバーはトークンとリソースを消費する
+2. **ローカル優先** — 可能な限りstdioトランスポートを使用する
+3. **権限を最小化** — MCPサーバーに渡すディレクトリやスコープを制限する
+4. **チームで統一** — `.mcp.json` をリポジトリにコミットして設定を共有する
+5. **バージョン固定** — 本番では `npx -y package@version` でバージョンを指定する

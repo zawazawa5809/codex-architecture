@@ -46,7 +46,15 @@ const translations = {
       "OpenAI のオープンソース AI コーディングエージェント。Rust + TypeScript ハイブリッドアーキテクチャ、マルチプラットフォームサンドボックス、SQ/EQ プロトコルを深掘り。",
     "index.cta.read": "解説を読む",
     "index.claudeDesc":
-      "Anthropic の CLI ベース AI コーディングツール。ソース公開のアーキテクチャを解析予定。",
+      "Anthropic の CLI ベース AI コーディングエージェント。Skills, Hooks, MCP, CLAUDE.md などの公開機能アーキテクチャを解説。",
+    "nav.claude.overview": "概要",
+    "nav.claude.claudeMd": "CLAUDE.md & Memory",
+    "nav.claude.skills": "Skills",
+    "nav.claude.hooks": "Hooks",
+    "nav.claude.mcp": "MCP連携",
+    "nav.claude.permissions": "権限 & セキュリティ",
+    "nav.group.codex": "Codex CLI",
+    "nav.group.claude": "Claude Code",
   },
   en: {
     "site.title": "AI Agent Architecture Atlas",
@@ -86,7 +94,15 @@ const translations = {
       "OpenAI's open-source AI coding agent. Deep dive into the Rust + TypeScript hybrid architecture, multi-platform sandbox, and SQ/EQ protocol.",
     "index.cta.read": "Read the guide",
     "index.claudeDesc":
-      "Anthropic's CLI-based AI coding tool. Architecture analysis of the open-source release coming soon.",
+      "Anthropic's CLI-based AI coding agent. Explore the architecture of public features: Skills, Hooks, MCP, CLAUDE.md, and more.",
+    "nav.claude.overview": "Overview",
+    "nav.claude.claudeMd": "CLAUDE.md & Memory",
+    "nav.claude.skills": "Skills",
+    "nav.claude.hooks": "Hooks",
+    "nav.claude.mcp": "MCP Integration",
+    "nav.claude.permissions": "Permissions & Security",
+    "nav.group.codex": "Codex CLI",
+    "nav.group.claude": "Claude Code",
   },
 } as const;
 

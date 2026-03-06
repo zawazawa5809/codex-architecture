@@ -1,0 +1,194 @@
+---
+title: "Hooks"
+order: 4
+description: "Pre/PostToolUse hook system and guardrail design patterns"
+---
+
+{/* Hooks System - English */}
+
+## What are Hooks?
+
+Hooks are **event-driven scripts** that run automatically when specific events occur
+during Claude Code's execution. They enable you to enforce guardrails, automate
+side effects, and customize the agent's behavior without modifying its core logic.
+
+Hooks are configured in the Claude Code settings file (`.claude/settings.json`).
+
+## Event Types
+
+Claude Code supports four hook event types:
+
+| Event | Trigger | Use Case |
+|-------|---------|----------|
+| **PreToolUse** | Before a tool is executed | Validate, block, or modify tool calls |
+| **PostToolUse** | After a tool completes | Audit, transform output, trigger side effects |
+| **Notification** | When Claude Code sends a notification | Custom notification routing |
+| **Stop** | When the agent finishes a turn | Final validation, cleanup tasks |
+
+## Configuration
+
+Hooks are defined in `.claude/settings.json` under the `hooks` key:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hook": {
+          "type": "command",
+          "command": "python3 .claude/hooks/check-write.py"
+        }
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hook": {
+          "type": "command",
+          "command": "bash .claude/hooks/audit-bash.sh"
+        }
+      }
+    ]
+  }
+}
+```
+
+## Matcher Patterns
+
+The `matcher` field determines which tool invocations trigger the hook:
+
+| Pattern | Matches |
+|---------|---------|
+| `"Write"` | Only the Write tool |
+| `"Bash"` | Only the Bash tool |
+| `"Read"` | Only the Read tool |
+| `""` (empty) | All tools |
+
+## Hook Types
+
+### Command Hooks
+
+Command hooks execute a shell command. The tool call details are passed via
+**stdin** as JSON, and the hook communicates back via **stdout**.
+
+```json
+{
+  "type": "command",
+  "command": "python3 .claude/hooks/validate.py"
+}
+```
+
+The command receives a JSON object on stdin:
+
+```json
+{
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/path/to/file.ts",
+    "content": "..."
+  }
+}
+```
+
+### Hook Input by Event Type
+
+| Event | Input Contains |
+|-------|---------------|
+| **PreToolUse** | `tool_name`, `tool_input` |
+| **PostToolUse** | `tool_name`, `tool_input`, `tool_output` |
+| **Notification** | `message` |
+| **Stop** | `stop_reason` |
+
+## Return Values (PreToolUse)
+
+PreToolUse hooks can control execution by returning JSON on stdout:
+
+| Return | Effect |
+|--------|--------|
+| `{ "decision": "allow" }` | Permit the tool call |
+| `{ "decision": "block", "reason": "..." }` | Block with an explanation |
+| `{ "decision": "modify", "tool_input": {...} }` | Modify the tool's input |
+| No output / empty | Default to allow |
+
+```python
+import json, sys
+
+data = json.load(sys.stdin)
+
+if data["tool_name"] == "Write":
+    path = data["tool_input"]["file_path"]
+    if "/migrations/" in path:
+        json.dump({
+            "decision": "block",
+            "reason": "Direct migration edits are forbidden."
+        }, sys.stdout)
+        sys.exit(0)
+
+json.dump({"decision": "allow"}, sys.stdout)
+```
+
+## Security Patterns
+
+### Prevent Dangerous Commands
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hook": {
+          "type": "command",
+          "command": "python3 .claude/hooks/block-dangerous.py"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Audit Logging
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hook": {
+          "type": "command",
+          "command": "bash -c 'cat >> .claude/audit.log'"
+        }
+      }
+    ]
+  }
+}
+```
+
+### Auto-format on Write
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hook": {
+          "type": "command",
+          "command": "bash .claude/hooks/auto-format.sh"
+        }
+      }
+    ]
+  }
+}
+```
+
+## Best Practices
+
+- **Keep hooks fast** — They run synchronously and block the agent.
+- **Fail open or closed deliberately** — Decide whether a hook failure should allow or block.
+- **Log generously** — Hooks are hard to debug without logs.
+- **Use PreToolUse for prevention** — Block bad actions before they happen.
+- **Use PostToolUse for observation** — Audit, format, or notify after the fact.
+- **Test hooks independently** — Run them with sample JSON input before deploying.

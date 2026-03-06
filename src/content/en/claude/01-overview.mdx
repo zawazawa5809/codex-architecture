@@ -1,0 +1,106 @@
+---
+title: "Overview"
+order: 1
+description: "An overview of Claude Code's architecture, key features, and workflow"
+---
+
+{/* Claude Code Overview - English */}
+
+## What is Claude Code?
+
+Claude Code is Anthropic's official agentic coding assistant. It operates as both a **CLI tool**
+and an **IDE extension** (VS Code, JetBrains), enabling developers to delegate complex coding
+tasks to an AI agent that can read, write, and execute code autonomously.
+
+Unlike simple code-completion tools, Claude Code is a fully **agentic system** — it plans,
+executes multi-step tasks, uses tools, and iterates until the goal is achieved.
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Agentic Loop** | Continuously plans, acts, observes, and iterates until the task is complete |
+| **Tool Use** | Reads/writes files, runs shell commands, searches codebases, and more |
+| **Multi-turn Conversation** | Maintains context across an entire coding session |
+| **CLAUDE.md** | Project-level configuration that customizes behavior per-repository |
+| **Skills** | Reusable instruction sets that trigger on specific patterns |
+| **Hooks** | Event-driven scripts for guardrails and automation |
+| **MCP Integration** | Extends capabilities via Model Context Protocol servers |
+
+## How It Works
+
+The core execution model follows an **agentic loop**:
+
+```
+User Input
+    |
+    v
+System Prompt (+ CLAUDE.md + Memory)
+    |
+    v
+LLM Reasoning
+    |
+    v
+Tool Selection & Execution
+    |
+    v
+Observe Result
+    |
+    v
+Continue or Respond
+```
+
+1. **User Input** — The developer provides a task or question in natural language.
+2. **System Prompt Assembly** — Claude Code assembles context from the system prompt,
+   CLAUDE.md files, memory, and conversation history.
+3. **LLM Reasoning** — The model analyzes the task and decides on the next action.
+4. **Tool Execution** — The agent invokes tools (file read, file write, bash, grep, etc.).
+5. **Observation** — The tool result is fed back into the model.
+6. **Loop or Respond** — The model decides whether to take another action or respond to the user.
+
+## CLI vs IDE
+
+Claude Code is available in two primary interfaces:
+
+| Aspect | CLI | IDE Extension |
+|--------|-----|---------------|
+| **Interface** | Terminal (`claude` command) | VS Code / JetBrains sidebar |
+| **Invocation** | `claude` or `claude "task"` | Chat panel or keyboard shortcut |
+| **Headless Mode** | `claude -p "task"` for scripting | Not available |
+| **Context** | Working directory + explicit files | Open files + workspace |
+| **Best For** | Automation, CI/CD, power users | Interactive development |
+
+## The Agentic Nature
+
+What makes Claude Code truly agentic is its ability to **self-direct**:
+
+- **Planning** — It breaks down complex tasks into steps before acting.
+- **Error Recovery** — When a command fails, it reads the error and tries a different approach.
+- **Exploration** — It searches the codebase to understand patterns before making changes.
+- **Verification** — It runs tests and checks its own work after making changes.
+
+This agentic behavior means you can give Claude Code high-level instructions like
+*"add pagination to the user list API"* and it will autonomously explore the codebase,
+understand the patterns, implement the feature, and verify the result.
+
+## Architecture Summary
+
+```
+Developer
+    |
+    v
+Claude Code (CLI / IDE)
+    |
+    +-- CLAUDE.md (configuration)
+    +-- Skills (reusable instructions)
+    +-- Hooks (event-driven guardrails)
+    +-- MCP Servers (external tools)
+    |
+    v
+Claude API (LLM)
+    |
+    v
+Tools (Read, Write, Bash, Grep, ...)
+```
+
+Each of these components is explored in detail in the following sections.

@@ -1,0 +1,141 @@
+---
+title: "CLAUDE.md & Memory"
+order: 2
+description: "Understanding CLAUDE.md configuration hierarchy, Auto Memory, and instruction priority"
+---
+
+{/* CLAUDE.md and Memory System - English */}
+
+## What is CLAUDE.md?
+
+CLAUDE.md is a Markdown file that provides **persistent instructions** to Claude Code.
+It acts as the project's configuration layer, telling the agent how to behave, what
+conventions to follow, and what constraints to respect.
+
+Think of it as a `.editorconfig` or `.eslintrc` for your AI assistant — except it
+accepts natural language instructions.
+
+## Hierarchy
+
+CLAUDE.md files exist at three levels, each with a different scope:
+
+| Level | Location | Scope |
+|-------|----------|-------|
+| **Global** | `~/.claude/CLAUDE.md` | All projects for the current user |
+| **Project** | `CLAUDE.md` (repo root) | Everyone working on this repository |
+| **Local** | `.claude/CLAUDE.md` (repo root) | Personal overrides (gitignored) |
+
+Additionally, **directory-level** CLAUDE.md files can be placed in any subdirectory.
+These are loaded only when Claude Code reads files from that directory.
+
+## Priority Cascade
+
+When multiple CLAUDE.md files exist, they are merged with the following priority
+(highest to lowest):
+
+```
+1. Local    (.claude/CLAUDE.md)        -- Highest priority
+2. Directory (subdirectory/CLAUDE.md)  -- Context-specific
+3. Project  (CLAUDE.md at repo root)   -- Team-shared
+4. Global   (~/.claude/CLAUDE.md)      -- User defaults
+```
+
+Later entries do **not** override earlier ones. Instead, all instructions are combined
+and presented to the model, with higher-priority instructions appearing more prominently
+in the system prompt.
+
+## Writing Effective CLAUDE.md
+
+A well-structured CLAUDE.md typically contains:
+
+```markdown
+# Project Instructions
+
+## Language & Style
+- Use TypeScript strict mode
+- Prefer functional components with hooks
+- Write tests using Vitest
+
+## Architecture
+- Follow the hexagonal architecture pattern
+- Keep domain logic in src/domain/
+
+## Git
+- Use Conventional Commits
+- Always run tests before committing
+
+## Forbidden
+- Never modify the migration files directly
+- Do not use `any` type
+```
+
+### Best Practices
+
+- **Be specific** — "Use `pnpm`" is better than "use the correct package manager."
+- **Use sections** — Group related instructions under clear headings.
+- **State constraints** — Explicitly list what the agent should NOT do.
+- **Keep it concise** — The entire file is injected into the prompt; avoid bloat.
+
+## Auto Memory
+
+Claude Code has an **Auto Memory** system that automatically persists important
+context between sessions.
+
+### How It Works
+
+1. During a conversation, Claude Code identifies important facts about the project.
+2. These facts are saved to `~/.claude/projects/<project-hash>/MEMORY.md`.
+3. On subsequent sessions, the memory is loaded automatically.
+
+### MEMORY.md
+
+The MEMORY.md file is automatically managed and contains learned facts such as:
+
+- Project tech stack and dependencies
+- Build and test commands
+- Key architectural decisions
+- File structure patterns
+
+```markdown
+# Project Memory
+
+## Tech Stack
+- Astro 5 + Tailwind CSS v4 + React
+- Package manager: pnpm
+
+## Build Commands
+- pnpm run build → dist/
+- pnpm run test → Vitest
+```
+
+### Memory vs CLAUDE.md
+
+| Aspect | CLAUDE.md | MEMORY.md |
+|--------|-----------|-----------|
+| **Author** | Developer (manual) | Claude Code (automatic) |
+| **Purpose** | Instructions and rules | Learned facts and context |
+| **Versioned** | Yes (project-level) | No (user-local) |
+| **Editable** | Yes | Yes (but may be overwritten) |
+
+## Instruction Priority in Practice
+
+The full instruction assembly order for Claude Code is:
+
+```
+System Prompt (Anthropic)
+    +
+Global CLAUDE.md
+    +
+Project CLAUDE.md
+    +
+Local CLAUDE.md
+    +
+Directory CLAUDE.md (contextual)
+    +
+MEMORY.md (auto memory)
+    +
+Conversation History
+```
+
+This layered approach ensures that team conventions, personal preferences, and
+learned context all contribute to the agent's behavior.

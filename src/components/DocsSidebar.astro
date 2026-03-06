@@ -1,5 +1,5 @@
 ---
-import { codexSections } from "../data/codex-sections";
+import { getSections } from "../data/sections-registry";
 import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
 
 interface Props {
@@ -22,7 +22,7 @@ function sectionUrl(slug: string): string {
       {agentName.toUpperCase()}
     </p>
     {
-      codexSections.map((section) => {
+      getSections(agentName).map((section) => {
         const isActive = section.slug === currentSlug;
         return (
           <a

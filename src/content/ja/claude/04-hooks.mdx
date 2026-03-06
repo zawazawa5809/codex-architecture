@@ -1,0 +1,166 @@
+---
+title: "Hooks"
+order: 4
+description: "Pre/PostToolUse hookシステム、ガードレール設計を解説"
+---
+
+{/* Hooks システム */}
+
+## Hooksとは
+
+Hooksは、Claude Codeのツール実行の**前後に自動実行されるシェルコマンド**である。
+コード品質のガードレール、セキュリティチェック、自動フォーマットなどを
+ツール実行パイプラインに組み込める。
+
+## イベントタイプ
+
+| イベント | 実行タイミング | 主な用途 |
+|---------|--------------|---------|
+| `PreToolUse` | ツール実行の直前 | 入力の検証、危険な操作のブロック |
+| `PostToolUse` | ツール実行の直後 | 結果の検証、自動フォーマット |
+| `Notification` | 通知発生時 | 外部サービスへの通知 |
+| `Stop` | エージェントループ終了時 | 最終チェック、クリーンアップ |
+
+## 設定方法
+
+Hooksは `.claude/settings.json` の `hooks` フィールドに定義する。
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "type": "command",
+        "command": "echo 'File modification detected'"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "type": "command",
+        "command": "npx prettier --write $CLAUDE_FILE_PATH"
+      }
+    ]
+  }
+}
+```
+
+## Matcher パターン
+
+`matcher` はツール名に対するパターンマッチングを行う。
+
+| パターン | マッチ対象 |
+|---------|----------|
+| `"Edit"` | Editツールのみ |
+| `"Edit\|Write"` | EditまたはWriteツール |
+| `"Bash"` | Bashツールのみ |
+| `"mcp__.*"` | すべてのMCPツール |
+| `"mcp__slack__.*"` | Slack MCPのすべてのツール |
+| `"mcp__.*__delete.*"` | 任意のMCPサーバーのdelete系ツール |
+| `""` (空文字) | すべてのツール |
+
+正規表現パターンが使用可能で、柔軟なマッチングを実現する。
+
+## Hookタイプ
+
+### command タイプ
+
+シェルコマンドを実行する。終了コードで動作を制御する。
+
+```json
+{
+  "matcher": "Bash",
+  "type": "command",
+  "command": "python3 /scripts/validate-command.py"
+}
+```
+
+**終了コード:**
+
+| 終了コード | 動作 |
+|-----------|------|
+| `0` | 承認（ツール実行を許可） |
+| `1` | ブロック（ツール実行を拒否） |
+| `2` | エラー（hookの実行失敗として処理） |
+
+### prompt タイプ
+
+LLMベースの検証を行う。プロンプトで判定基準を記述する。
+
+```json
+{
+  "matcher": "Edit",
+  "type": "prompt",
+  "prompt": "この編集がセキュリティ上の問題を含まないか確認してください。問題がある場合は理由を説明してください。"
+}
+```
+
+## 環境変数
+
+Hook実行時に以下の環境変数が利用できる。
+
+| 変数 | 説明 |
+|------|------|
+| `$CLAUDE_TOOL_NAME` | 実行されるツール名 |
+| `$CLAUDE_TOOL_INPUT` | ツールへの入力（JSON） |
+| `$CLAUDE_FILE_PATH` | 対象ファイルのパス（該当する場合） |
+| `$CLAUDE_TOOL_OUTPUT` | ツールの出力（PostToolUseのみ） |
+
+## セキュリティパターン
+
+### 危険なコマンドのブロック
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "type": "command",
+        "command": "echo $CLAUDE_TOOL_INPUT | jq -r '.command' | grep -qE '(rm -rf /|DROP TABLE|format)' && exit 1 || exit 0"
+      }
+    ]
+  }
+}
+```
+
+### 特定ファイルの保護
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "type": "command",
+        "command": "echo $CLAUDE_FILE_PATH | grep -qE '(\\.env|secrets\\.json|credentials)' && exit 1 || exit 0"
+      }
+    ]
+  }
+}
+```
+
+### 編集後の自動フォーマット
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "type": "command",
+        "command": "npx prettier --write $CLAUDE_FILE_PATH 2>/dev/null; exit 0"
+      }
+    ]
+  }
+}
+```
+
+## ベストプラクティス
+
+1. **冪等性** — Hookは何度実行しても同じ結果になるようにする
+2. **高速に保つ** — 重い処理はHookに入れない（エージェントループが遅くなる）
+3. **失敗を安全に** — Hookのエラーでワークフロー全体が停止しないよう設計する
+4. **ログを残す** — デバッグのためにHookの実行ログを出力する
+5. **チームで標準化** — セキュリティHookはManaged設定で強制する

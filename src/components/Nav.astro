@@ -2,22 +2,41 @@
 import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
 import LanguageToggle from "./LanguageToggle.tsx";
 import { codexSections } from "../data/codex-sections";
+import { claudeSections } from "../data/claude-sections";
 
 interface Props {
   lang?: Lang;
   /** Currently active docs section slug (for highlighting in nav) */
   currentSlug?: string;
+  /** Currently active agent name */
+  activeAgent?: string;
 }
 
-const { lang = "ja", currentSlug } = Astro.props;
+const { lang = "ja", currentSlug, activeAgent } = Astro.props;
 const t = useTranslation(lang);
 
-const navItems = codexSections.map((section) => ({
-  slug: section.slug,
-  label: t(section.navKey as any),
-  href: getLocalePath(lang, `/codex/${section.slug}`),
-  number: section.number,
-}));
+const navGroups = [
+  {
+    name: t("nav.group.codex" as any),
+    agent: "codex",
+    items: codexSections.map((section) => ({
+      slug: section.slug,
+      label: t(section.navKey as any),
+      href: getLocalePath(lang, `/codex/${section.slug}`),
+      number: section.number,
+    })),
+  },
+  {
+    name: t("nav.group.claude" as any),
+    agent: "claude",
+    items: claudeSections.map((section) => ({
+      slug: section.slug,
+      label: t(section.navKey as any),
+      href: getLocalePath(lang, `/claude/${section.slug}`),
+      number: section.number,
+    })),
+  },
+];
 ---
 
 <nav
@@ -32,22 +51,51 @@ const navItems = codexSections.map((section) => ({
 
     <div class="hidden items-center gap-1 lg:flex">
       {
-        navItems.map((item) => {
-          const isActive = item.slug === currentSlug;
-          return (
-            <a
-              href={item.href}
+        navGroups.map((group) => (
+          <div class="nav-group relative" data-nav-group>
+            <button
               class:list={[
-                "nav-link rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
-                isActive
+                "nav-link rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)] flex items-center gap-1",
+                activeAgent === group.agent
                   ? "text-[var(--color-accent-cyan)]"
                   : "text-[var(--color-text-secondary)]",
               ]}
+              aria-expanded="false"
+              data-nav-trigger
             >
-              {item.label}
-            </a>
-          );
-        })
+              {group.name}
+              <svg class="h-3 w-3 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            <div class="nav-dropdown absolute left-0 top-full z-50 mt-1 hidden min-w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-primary)] py-1 shadow-xl" data-nav-dropdown>
+              {group.items.map((item) => {
+                const isActive = activeAgent === group.agent && item.slug === currentSlug;
+                return (
+                  <a
+                    href={item.href}
+                    class:list={[
+                      "flex items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
+                      isActive
+                        ? "text-[var(--color-accent-cyan)]"
+                        : "text-[var(--color-text-secondary)]",
+                    ]}
+                  >
+                    <span class:list={[
+                      "flex h-4 w-4 items-center justify-center rounded font-mono text-[9px]",
+                      isActive
+                        ? "bg-[var(--color-accent-indigo)]/20 text-[var(--color-accent-indigo)]"
+                        : "bg-white/5 text-[var(--color-text-muted)]",
+                    ]}>
+                      {item.number}
+                    </span>
+                    {item.label}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        ))
       }
     </div>
 
@@ -77,34 +125,43 @@ const navItems = codexSections.map((section) => ({
     id="mobile-menu"
     class="mobile-menu-panel max-h-0 overflow-hidden border-t border-[var(--color-border)] bg-[var(--color-bg-primary)]/95 backdrop-blur-xl lg:hidden"
   >
-    <div class="space-y-1 px-4 py-3">
+    <div class="space-y-3 px-4 py-3">
       {
-        navItems.map((item) => {
-          const isActive = item.slug === currentSlug;
-          return (
-            <a
-              href={item.href}
-              class:list={[
-                "mobile-nav-link nav-link flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
-                isActive
-                  ? "border-l-2 border-[var(--color-accent-cyan)] bg-[var(--color-accent-indigo)]/10 text-[var(--color-accent-cyan)]"
-                  : "text-[var(--color-text-secondary)]",
-              ]}
-            >
-              <span
-                class:list={[
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded font-mono text-[10px]",
-                  isActive
-                    ? "bg-[var(--color-accent-indigo)]/20 text-[var(--color-accent-indigo)]"
-                    : "bg-white/5 text-[var(--color-text-muted)]",
-                ]}
-              >
-                {item.number}
-              </span>
-              {item.label}
-            </a>
-          );
-        })
+        navGroups.map((group) => (
+          <div>
+            <p class="mb-1 px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {group.name}
+            </p>
+            <div class="space-y-1">
+              {group.items.map((item) => {
+                const isActive = activeAgent === group.agent && item.slug === currentSlug;
+                return (
+                  <a
+                    href={item.href}
+                    class:list={[
+                      "mobile-nav-link nav-link flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-white/5 hover:text-[var(--color-text-primary)]",
+                      isActive
+                        ? "border-l-2 border-[var(--color-accent-cyan)] bg-[var(--color-accent-indigo)]/10 text-[var(--color-accent-cyan)]"
+                        : "text-[var(--color-text-secondary)]",
+                    ]}
+                  >
+                    <span
+                      class:list={[
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded font-mono text-[10px]",
+                        isActive
+                          ? "bg-[var(--color-accent-indigo)]/20 text-[var(--color-accent-indigo)]"
+                          : "bg-white/5 text-[var(--color-text-muted)]",
+                      ]}
+                    >
+                      {item.number}
+                    </span>
+                    {item.label}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        ))
       }
     </div>
   </div>
@@ -150,6 +207,65 @@ const navItems = codexSections.map((section) => ({
     if (nav && !nav.contains(e.target as Node) && menu?.classList.contains("mobile-menu-open")) {
       closeMenu();
     }
+  });
+
+  // --- Desktop dropdown menus ---
+  const navGroupEls = document.querySelectorAll<HTMLElement>("[data-nav-group]");
+  const groupRefs = Array.from(navGroupEls).map((group) => ({
+    group,
+    trigger: group.querySelector<HTMLButtonElement>("[data-nav-trigger]"),
+    dropdown: group.querySelector<HTMLElement>("[data-nav-dropdown]"),
+  })).filter((r): r is { group: HTMLElement; trigger: HTMLButtonElement; dropdown: HTMLElement } =>
+    r.trigger !== null && r.dropdown !== null
+  );
+
+  groupRefs.forEach(({ group, trigger, dropdown }) => {
+    let hideTimeout: ReturnType<typeof setTimeout>;
+
+    function show() {
+      clearTimeout(hideTimeout);
+      groupRefs.forEach((other) => {
+        if (other.group !== group) {
+          other.dropdown.classList.add("hidden");
+          other.trigger.setAttribute("aria-expanded", "false");
+        }
+      });
+      dropdown.classList.remove("hidden");
+      trigger.setAttribute("aria-expanded", "true");
+    }
+
+    function hide() {
+      hideTimeout = setTimeout(() => {
+        dropdown.classList.add("hidden");
+        trigger.setAttribute("aria-expanded", "false");
+      }, 150);
+    }
+
+    group.addEventListener("mouseenter", show);
+    group.addEventListener("mouseleave", hide);
+    trigger.addEventListener("click", () => {
+      if (dropdown.classList.contains("hidden")) show();
+      else hide();
+    });
+
+    // Keyboard accessibility
+    trigger.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
+        e.preventDefault();
+        show();
+        const firstLink = dropdown.querySelector<HTMLAnchorElement>("a");
+        firstLink?.focus();
+      }
+    });
+
+    dropdown.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        dropdown.classList.add("hidden");
+        trigger.setAttribute("aria-expanded", "false");
+        trigger.focus();
+      }
+    });
   });
 </script>
 
