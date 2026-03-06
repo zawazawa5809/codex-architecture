@@ -1,0 +1,474 @@
+---
+title: "Hooks Cheatsheet"
+order: 4.5
+description: "Claude Code Hooks 全18イベント・4ハンドラータイプ完全リファレンス"
+---
+
+{/* Hooks Cheatsheet - 全オプション網羅リファレンス */}
+
+## イベント選択ガイド
+
+上のダイアグラムでノードにホバーすると、目的→イベント→ハンドラーの関連が可視化される。
+「何をしたいか」から最適なイベントを逆引きしよう。
+
+---
+
+## 全18イベントリファレンス
+
+### ツール制御イベント
+
+最も使用頻度が高いカテゴリ。ツール実行のライフサイクルに介入する。
+
+| イベント | ハンドラー | Matcher対象 | いつ使う? | 頻度 |
+|---------|-----------|------------|----------|------|
+| `PreToolUse` | 全4種 | ツール名 | 危険操作の事前ブロック、入力検証 | 高 |
+| `PostToolUse` | 全4種 | ツール名 | 出力検証、自動フォーマット、監査ログ | 高 |
+| `PostToolUseFailure` | 全4種 | ツール名 | 失敗時のフォールバック、エラー通知 | 中 |
+| `PermissionRequest` | 全4種 | ツール名 | 権限ダイアログの自動応答、ポリシー適用 | 中 |
+
+**PreToolUse stdin入力:**
+
+```json
+{
+  "session_id": "abc123",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "tool_123",
+  "tool_input": { "command": "npm test" },
+  "cwd": "/project",
+  "transcript_path": "...",
+  "permission_mode": "default",
+  "ts": 1693478400
+}
+```
+
+**PreToolUse 出力制御 (hookSpecificOutput):**
+
+```json
+{
+  "hookSpecificOutput": {
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "Security check passed"
+  }
+}
+```
+
+`permissionDecision` は `"allow"` | `"deny"` | `"ask"` の3値。
+
+**PostToolUse stdin入力** (追加フィールド):
+
+```json
+{
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm test" },
+  "tool_use_output": {
+    "stdout": "All tests passed",
+    "stderr": "",
+    "exit_code": 0
+  }
+}
+```
+
+**PermissionRequest 出力制御:**
+
+```json
+{
+  "hookSpecificOutput": {
+    "decision": { "behavior": "allow" }
+  }
+}
+```
+
+### ライフサイクルイベント
+
+セッションやエージェントの開始・終了に反応する。
+
+| イベント | ハンドラー | Matcher対象 | いつ使う? | 頻度 |
+|---------|-----------|------------|----------|------|
+| `SessionStart` | command | 開始理由 | 環境セットアップ、状態初期化 | 中 |
+| `SessionEnd` | command | 終了理由 | クリーンアップ、統計記録 | 中 |
+| `Stop` | 全4種 | なし | 最終チェック、サマリー生成 | 高 |
+| `SubagentStart` | command | エージェント型 | サブエージェント監視、リソース制限 | 低 |
+| `SubagentStop` | 全4種 | エージェント型 | サブエージェント結果検証 | 低 |
+
+**SessionStart matcher値:**
+
+| 値 | 意味 |
+|---|------|
+| `startup` | 新規セッション開始 |
+| `resume` | 既存セッション再開 |
+
+**SessionEnd matcher値:**
+
+| 値 | 意味 |
+|---|------|
+| `clear` | セッションクリア |
+| `compact` | コンテキスト圧縮 |
+| `logout` | ログアウト |
+| `prompt_input_exit` | 入力終了 |
+
+**Stop stdin入力:**
+
+```json
+{
+  "session_id": "abc123",
+  "hook_event_name": "Stop",
+  "stop_reason": "complete",
+  "cwd": "/project",
+  "ts": 1693478400
+}
+```
+
+**SubagentStart/Stop matcher値:** `Bash`, `Explore`, `Plan`, カスタムエージェント名
+
+### コンテキストイベント
+
+ユーザー入力やインストラクション読み込みに反応する。
+
+| イベント | ハンドラー | Matcher対象 | いつ使う? | 頻度 |
+|---------|-----------|------------|----------|------|
+| `UserPromptSubmit` | 全4種 | なし | プロンプト前処理、入力バリデーション | 中 |
+| `TaskCompleted` | 全4種 | なし | タスク完了通知、後処理トリガー | 低 |
+| `InstructionsLoaded` | command | なし | インストラクション検証、動的設定注入 | 低 |
+
+**UserPromptSubmit stdin入力:**
+
+```json
+{
+  "session_id": "abc123",
+  "hook_event_name": "UserPromptSubmit",
+  "user_prompt": "Fix the bug in main.js",
+  "user_prompt_type": "user_message",
+  "cwd": "/project",
+  "ts": 1693478400
+}
+```
+
+**InstructionsLoaded stdin入力:**
+
+```json
+{
+  "file_path": "/project/CLAUDE.md",
+  "memory_type": "Project",
+  "load_reason": "session_start"
+}
+```
+
+### 環境・通知イベント
+
+通知配信、設定変更、ワークツリー管理に反応する。
+
+| イベント | ハンドラー | Matcher対象 | いつ使う? | 頻度 |
+|---------|-----------|------------|----------|------|
+| `Notification` | command | 通知タイプ | カスタム通知ルーティング | 中 |
+| `TeammateIdle` | command | なし | チームメイトアイドル時の処理 | 低 |
+| `ConfigChange` | command | なし | 設定変更の検知・監査 | 低 |
+| `PreCompact` | command | トリガー種別 | 圧縮前のコンテキスト保存 | 低 |
+| `WorktreeCreate` | command | なし | ワークツリー作成時の初期化 | 低 |
+| `WorktreeRemove` | command | なし | ワークツリー削除時のクリーンアップ | 低 |
+
+**Notification matcher値:** `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`
+
+**PreCompact matcher値:** `manual` (手動) / `auto` (自動)
+
+---
+
+## 4ハンドラータイプ比較
+
+| 特性 | `command` | `http` | `prompt` | `agent` |
+|------|-----------|--------|----------|---------|
+| **実行環境** | ローカルシェル | HTTPエンドポイント | LLM内判定 | サブエージェント |
+| **入力** | stdin (JSON) | POST body (JSON) | コンテキスト自動注入 | コンテキスト自動注入 |
+| **出力** | stdout (JSON) | Response body | yes/no判定 | 検証結果 |
+| **非同期** | `async: true` 可 | 不可 | 不可 | 不可 |
+| **timeout** | 設定可 | 設定可 | 設定可 | 設定可 |
+| **対応イベント** | 全18種 | 8種 | 8種 | 8種 |
+| **最適ユースケース** | スクリプト実行 | 外部API連携 | セマンティック検証 | 複雑な判断ロジック |
+
+### command ハンドラー
+
+```json
+{
+  "type": "command",
+  "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/validate.sh",
+  "timeout": 30,
+  "async": false
+}
+```
+
+- `async: true` で非同期実行（結果は次ターンで配信）
+- `$CLAUDE_PROJECT_DIR` でプロジェクトルート参照
+- exit code: `0` = 成功, `2` = ブロック (stderr がエラーメッセージ)
+
+### http ハンドラー
+
+```json
+{
+  "type": "http",
+  "url": "https://webhook.example.com/hooks",
+  "timeout": 30
+}
+```
+
+- イベントJSONをHTTP POSTで送信
+- レスポンスボディでcommandと同じJSON形式を返す
+
+### prompt ハンドラー
+
+```json
+{
+  "type": "prompt",
+  "prompt": "Is this operation safe? Evaluate for security risks.",
+  "timeout": 20
+}
+```
+
+- Claudeモデルがyes/no判定を実行
+- セマンティックな検証（パターンマッチでは判断できないケース）に最適
+
+### agent ハンドラー
+
+```json
+{
+  "type": "agent",
+  "agent": "security-verifier",
+  "timeout": 60
+}
+```
+
+- ツールアクセス付きの検証エージェントを起動
+- ファイル読み込みやコード解析を含む複雑な判断に使用
+
+---
+
+## Matcher パターン詳解
+
+Matcherは正規表現をサポートする。イベントタイプごとにマッチ対象が異なる。
+
+### ツール名マッチング
+
+```
+"Bash"                    → Bashツールのみ
+"Edit|Write"              → EditまたはWrite
+"mcp__slack__.*"          → Slack MCPの全ツール
+"mcp__.*__delete.*"       → 任意MCPサーバーのdelete系
+""                        → 全ツール (空文字 = ワイルドカード)
+```
+
+### MCPツールの命名規則
+
+MCPツールは `mcp__<server>__<tool>` パターンで参照される。
+
+```
+mcp__github__search_repositories   → GitHub検索
+mcp__filesystem__read_file         → ファイル読み取り
+mcp__memory__.*                    → memoryサーバーの全ツール
+```
+
+---
+
+## レシピカード
+
+### 1. Git品質ゲート — コミット前のlintチェック
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); CMD=$(echo $INPUT | jq -r .tool_input.command); if echo \"$CMD\" | grep -q \"git commit\"; then cd $(echo $INPUT | jq -r .cwd) && npx lint-staged --quiet || exit 2; fi'"
+      }]
+    }]
+  }
+}
+```
+
+### 2. Webhook通知 — 権限リクエスト時にSlackへ通知
+
+```json
+{
+  "hooks": {
+    "Notification": [{
+      "matcher": "permission_prompt",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); curl -s -X POST $SLACK_WEBHOOK_URL -H \"Content-Type: application/json\" -d \"{\\\"text\\\": \\\"Claude Code permission request: $(echo $INPUT | jq -r .notification_message)\\\"}\"'"
+      }]
+    }]
+  }
+}
+```
+
+### 3. セキュリティ監査ログ — 全ツール実行を記録
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); echo \"[$(date -Iseconds)] $(echo $INPUT | jq -c {tool:.tool_name,input:.tool_input})\" >> $CLAUDE_PROJECT_DIR/.claude/audit.log'"
+      }]
+    }]
+  }
+}
+```
+
+### 4. 自動フォーマット — ファイル変更後にPrettier実行
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "Edit|Write",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); FILE=$(echo $INPUT | jq -r .tool_input.file_path); npx prettier --write \"$FILE\" 2>/dev/null; exit 0'"
+      }]
+    }]
+  }
+}
+```
+
+### 5. LLM安全判定 — 危険操作のセマンティック検証
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "prompt",
+        "prompt": "Evaluate if this bash command could be destructive (deleting files, dropping databases, modifying system config). If dangerous, deny it."
+      }]
+    }]
+  }
+}
+```
+
+### 6. サブエージェント監視 — 起動ログ記録
+
+```json
+{
+  "hooks": {
+    "SubagentStart": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); echo \"[$(date -Iseconds)] Subagent started: $(echo $INPUT | jq -r .agent_type)\" >> /tmp/claude-agents.log'"
+      }]
+    }]
+  }
+}
+```
+
+### 7. セッション統計 — 開始・終了時刻の記録
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "startup",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'echo \"{\\\"start\\\": \\\"$(date -Iseconds)\\\", \\\"session_id\\\": \\\"$(cat | jq -r .session_id)\\\"}\" >> ~/.claude/session-stats.jsonl'"
+      }]
+    }],
+    "SessionEnd": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'echo \"{\\\"end\\\": \\\"$(date -Iseconds)\\\", \\\"session_id\\\": \\\"$(cat | jq -r .session_id)\\\"}\" >> ~/.claude/session-stats.jsonl'"
+      }]
+    }]
+  }
+}
+```
+
+### 8. コンテキスト圧縮前バックアップ — トランスクリプト保存
+
+```json
+{
+  "hooks": {
+    "PreCompact": [{
+      "matcher": "auto",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); cp \"$(echo $INPUT | jq -r .transcript_path)\" \"$(echo $INPUT | jq -r .transcript_path).bak.$(date +%s)\"'"
+      }]
+    }]
+  }
+}
+```
+
+---
+
+## セキュリティ脅威モデルマッピング
+
+| 脅威 | 攻撃例 | 防御フック | ハンドラー |
+|------|--------|-----------|-----------|
+| **コマンドインジェクション** | `rm -rf /`, `DROP TABLE` | `PreToolUse` (Bash) | command / prompt |
+| **機密ファイルアクセス** | `.env`, `credentials.json` 読み書き | `PreToolUse` (Read/Write/Edit) | command |
+| **データ漏洩** | 機密情報を含む出力の外部送信 | `PostToolUse` | command / prompt |
+| **過剰権限取得** | 不要な権限の自動承認 | `PermissionRequest` | command / prompt |
+| **プロンプトインジェクション** | ユーザー入力に埋め込まれた悪意ある指示 | `UserPromptSubmit` | prompt / agent |
+| **リソース枯渇** | 無限ループ、大量サブエージェント生成 | `SubagentStart` + timeout | command |
+| **設定改ざん** | セキュリティ設定の無断変更 | `ConfigChange` | command |
+
+---
+
+## 出力制御リファレンス
+
+### exit code (command ハンドラー)
+
+| コード | 動作 |
+|--------|------|
+| `0` | 成功 / 許可 (JSON出力で詳細制御可) |
+| `2` | ブロック / 拒否 (stderr がエラーメッセージ) |
+| その他 | フックのエラーとして処理 |
+
+### decision フィールド (JSON出力)
+
+```json
+{ "decision": "block", "reason": "Policy violation" }
+```
+
+ブロック可能なイベント: `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `Stop`, `SubagentStop`, `ConfigChange`
+
+### continue フィールド (TaskCompleted / TeammateIdle)
+
+```json
+{ "continue": false, "stopReason": "Test failed" }
+```
+
+---
+
+## 設定ファイルの配置
+
+| レベル | パス | スコープ |
+|--------|------|---------|
+| ユーザー | `~/.claude/settings.json` | 全プロジェクト共通 |
+| プロジェクト | `.claude/settings.json` | 当該プロジェクトのみ |
+| スキル/プラグイン | `hooks/hooks.json` | スキル内のみ |
+
+マネージド設定 (`~/.claude/settings.json` の `managedHooks`) はチームで強制適用できる。
+
+---
+
+## デバッグのコツ
+
+1. **ドライラン** — フックスクリプトに直接JSONを流して動作確認:
+   ```bash
+   echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | bash .claude/hooks/my-hook.sh
+   ```
+
+2. **ログ出力** — stderr はClaude Codeのログに出力される（stdout は制御用なので分離）
+
+3. **タイムアウト** — デフォルトタイムアウトは短い。重い処理には `timeout` を明示的に設定
+
+4. **実行順序** — 同一イベントの複数フックは配列順に直列実行。最初のブロック判定で停止
+
+5. **`/hooks` コマンド** — Claude Code内で `/hooks` と入力するとインタラクティブな設定UIが起動

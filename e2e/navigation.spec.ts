@@ -51,3 +51,30 @@ test.describe("Index page card links", () => {
     expect(page.url()).toContain("/en/codex");
   });
 });
+
+test.describe("Hooks cheatsheet navigation", () => {
+  test("hooks page links to cheatsheet", async ({ page }) => {
+    await page.goto("./claude/hooks");
+    await page.waitForLoadState("networkidle");
+
+    const cheatsheetLink = page.locator('a[href*="hooks-cheatsheet"]').first();
+    await expect(cheatsheetLink).toBeVisible();
+    await cheatsheetLink.click();
+
+    await page.waitForURL("**/hooks-cheatsheet");
+    expect(page.url()).toContain("/claude/hooks-cheatsheet");
+  });
+
+  test("sidebar shows cheatsheet sublink with active state", async ({ page }) => {
+    await page.goto("./claude/hooks-cheatsheet");
+    await page.waitForLoadState("networkidle");
+
+    const sidebar = page.locator("aside");
+    const sublink = sidebar.locator('a[href*="hooks-cheatsheet"]');
+    await expect(sublink).toBeVisible();
+    await expect(sublink).toHaveAttribute("aria-current", "page");
+
+    const hooksParentLink = sidebar.locator('a[href*="/claude/hooks"]:not([href*="hooks-cheatsheet"])');
+    await expect(hooksParentLink).not.toHaveAttribute("aria-current", "page");
+  });
+});

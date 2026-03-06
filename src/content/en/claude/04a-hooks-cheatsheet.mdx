@@ -1,0 +1,474 @@
+---
+title: "Hooks Cheatsheet"
+order: 4.5
+description: "Complete reference for all 18 Claude Code hook events and 4 handler types"
+---
+
+{/* Hooks Cheatsheet - Complete Options Reference */}
+
+## Event Selection Guide
+
+Hover over nodes in the diagram above to visualize the Goal → Event → Handler relationships.
+Use it to reverse-lookup the right event from what you want to achieve.
+
+---
+
+## All 18 Events Reference
+
+### Tool Control Events
+
+The most frequently used category. Intercept the tool execution lifecycle.
+
+| Event | Handlers | Matcher Target | When to Use | Freq |
+|-------|----------|---------------|-------------|------|
+| `PreToolUse` | All 4 | Tool name | Block dangerous ops, validate input | High |
+| `PostToolUse` | All 4 | Tool name | Validate output, auto-format, audit | High |
+| `PostToolUseFailure` | All 4 | Tool name | Failure fallback, error notification | Med |
+| `PermissionRequest` | All 4 | Tool name | Auto-respond to permission dialogs | Med |
+
+**PreToolUse stdin input:**
+
+```json
+{
+  "session_id": "abc123",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_use_id": "tool_123",
+  "tool_input": { "command": "npm test" },
+  "cwd": "/project",
+  "transcript_path": "...",
+  "permission_mode": "default",
+  "ts": 1693478400
+}
+```
+
+**PreToolUse output control (hookSpecificOutput):**
+
+```json
+{
+  "hookSpecificOutput": {
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "Security check passed"
+  }
+}
+```
+
+`permissionDecision` accepts `"allow"` | `"deny"` | `"ask"`.
+
+**PostToolUse stdin input** (additional fields):
+
+```json
+{
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm test" },
+  "tool_use_output": {
+    "stdout": "All tests passed",
+    "stderr": "",
+    "exit_code": 0
+  }
+}
+```
+
+**PermissionRequest output control:**
+
+```json
+{
+  "hookSpecificOutput": {
+    "decision": { "behavior": "allow" }
+  }
+}
+```
+
+### Lifecycle Events
+
+React to session and agent start/stop transitions.
+
+| Event | Handlers | Matcher Target | When to Use | Freq |
+|-------|----------|---------------|-------------|------|
+| `SessionStart` | command | Start reason | Environment setup, state init | Med |
+| `SessionEnd` | command | End reason | Cleanup, stats recording | Med |
+| `Stop` | All 4 | None | Final checks, summary generation | High |
+| `SubagentStart` | command | Agent type | Subagent monitoring, resource limits | Low |
+| `SubagentStop` | All 4 | Agent type | Subagent result verification | Low |
+
+**SessionStart matcher values:**
+
+| Value | Meaning |
+|-------|---------|
+| `startup` | New session started |
+| `resume` | Existing session resumed |
+
+**SessionEnd matcher values:**
+
+| Value | Meaning |
+|-------|---------|
+| `clear` | Session cleared |
+| `compact` | Context compacted |
+| `logout` | Logged out |
+| `prompt_input_exit` | Input terminated |
+
+**Stop stdin input:**
+
+```json
+{
+  "session_id": "abc123",
+  "hook_event_name": "Stop",
+  "stop_reason": "complete",
+  "cwd": "/project",
+  "ts": 1693478400
+}
+```
+
+**SubagentStart/Stop matcher values:** `Bash`, `Explore`, `Plan`, or custom agent names
+
+### Context Events
+
+React to user input and instruction loading.
+
+| Event | Handlers | Matcher Target | When to Use | Freq |
+|-------|----------|---------------|-------------|------|
+| `UserPromptSubmit` | All 4 | None | Prompt preprocessing, input validation | Med |
+| `TaskCompleted` | All 4 | None | Task completion notification, post-processing | Low |
+| `InstructionsLoaded` | command | None | Instruction validation, dynamic config injection | Low |
+
+**UserPromptSubmit stdin input:**
+
+```json
+{
+  "session_id": "abc123",
+  "hook_event_name": "UserPromptSubmit",
+  "user_prompt": "Fix the bug in main.js",
+  "user_prompt_type": "user_message",
+  "cwd": "/project",
+  "ts": 1693478400
+}
+```
+
+**InstructionsLoaded stdin input:**
+
+```json
+{
+  "file_path": "/project/CLAUDE.md",
+  "memory_type": "Project",
+  "load_reason": "session_start"
+}
+```
+
+### Environment & Notification Events
+
+React to notifications, config changes, and worktree management.
+
+| Event | Handlers | Matcher Target | When to Use | Freq |
+|-------|----------|---------------|-------------|------|
+| `Notification` | command | Notification type | Custom notification routing | Med |
+| `TeammateIdle` | command | None | Teammate idle handling | Low |
+| `ConfigChange` | command | None | Config change detection, auditing | Low |
+| `PreCompact` | command | Trigger type | Pre-compaction context backup | Low |
+| `WorktreeCreate` | command | None | Worktree initialization | Low |
+| `WorktreeRemove` | command | None | Worktree cleanup | Low |
+
+**Notification matcher values:** `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`
+
+**PreCompact matcher values:** `manual` / `auto`
+
+---
+
+## 4 Handler Types Compared
+
+| Property | `command` | `http` | `prompt` | `agent` |
+|----------|-----------|--------|----------|---------|
+| **Runs in** | Local shell | HTTP endpoint | LLM evaluation | Sub-agent |
+| **Input** | stdin (JSON) | POST body (JSON) | Auto-injected context | Auto-injected context |
+| **Output** | stdout (JSON) | Response body | yes/no decision | Verification result |
+| **Async** | `async: true` | No | No | No |
+| **Timeout** | Configurable | Configurable | Configurable | Configurable |
+| **Supported events** | All 18 | 8 | 8 | 8 |
+| **Best for** | Script execution | External APIs | Semantic checks | Complex reasoning |
+
+### command handler
+
+```json
+{
+  "type": "command",
+  "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/validate.sh",
+  "timeout": 30,
+  "async": false
+}
+```
+
+- `async: true` enables non-blocking background execution (result delivered next turn)
+- `$CLAUDE_PROJECT_DIR` references the project root
+- Exit codes: `0` = success, `2` = block (stderr used as error message)
+
+### http handler
+
+```json
+{
+  "type": "http",
+  "url": "https://webhook.example.com/hooks",
+  "timeout": 30
+}
+```
+
+- Sends event JSON as HTTP POST
+- Response body uses the same JSON format as command hooks
+
+### prompt handler
+
+```json
+{
+  "type": "prompt",
+  "prompt": "Is this operation safe? Evaluate for security risks.",
+  "timeout": 20
+}
+```
+
+- Claude model performs yes/no evaluation
+- Ideal for semantic validation that pattern matching cannot handle
+
+### agent handler
+
+```json
+{
+  "type": "agent",
+  "agent": "security-verifier",
+  "timeout": 60
+}
+```
+
+- Spawns a verification agent with tool access
+- Use for complex decisions requiring file reads or code analysis
+
+---
+
+## Matcher Patterns In-Depth
+
+Matchers support regular expressions. The match target differs by event type.
+
+### Tool Name Matching
+
+```
+"Bash"                    → Bash tool only
+"Edit|Write"              → Edit or Write
+"mcp__slack__.*"          → All Slack MCP tools
+"mcp__.*__delete.*"       → Delete tools across all MCP servers
+""                        → All tools (empty = wildcard)
+```
+
+### MCP Tool Naming Convention
+
+MCP tools follow the `mcp__<server>__<tool>` pattern:
+
+```
+mcp__github__search_repositories   → GitHub search
+mcp__filesystem__read_file         → File read
+mcp__memory__.*                    → All memory server tools
+```
+
+---
+
+## Recipe Cards
+
+### 1. Git Quality Gate — Lint check before commit
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); CMD=$(echo $INPUT | jq -r .tool_input.command); if echo \"$CMD\" | grep -q \"git commit\"; then cd $(echo $INPUT | jq -r .cwd) && npx lint-staged --quiet || exit 2; fi'"
+      }]
+    }]
+  }
+}
+```
+
+### 2. Webhook Notification — Slack alert on permission request
+
+```json
+{
+  "hooks": {
+    "Notification": [{
+      "matcher": "permission_prompt",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); curl -s -X POST $SLACK_WEBHOOK_URL -H \"Content-Type: application/json\" -d \"{\\\"text\\\": \\\"Claude Code permission request: $(echo $INPUT | jq -r .notification_message)\\\"}\"'"
+      }]
+    }]
+  }
+}
+```
+
+### 3. Security Audit Log — Record all tool executions
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); echo \"[$(date -Iseconds)] $(echo $INPUT | jq -c {tool:.tool_name,input:.tool_input})\" >> $CLAUDE_PROJECT_DIR/.claude/audit.log'"
+      }]
+    }]
+  }
+}
+```
+
+### 4. Auto-Format — Run Prettier after file changes
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "Edit|Write",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); FILE=$(echo $INPUT | jq -r .tool_input.file_path); npx prettier --write \"$FILE\" 2>/dev/null; exit 0'"
+      }]
+    }]
+  }
+}
+```
+
+### 5. LLM Safety Check — Semantic evaluation of dangerous operations
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "prompt",
+        "prompt": "Evaluate if this bash command could be destructive (deleting files, dropping databases, modifying system config). If dangerous, deny it."
+      }]
+    }]
+  }
+}
+```
+
+### 6. Subagent Monitoring — Log agent spawns
+
+```json
+{
+  "hooks": {
+    "SubagentStart": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); echo \"[$(date -Iseconds)] Subagent started: $(echo $INPUT | jq -r .agent_type)\" >> /tmp/claude-agents.log'"
+      }]
+    }]
+  }
+}
+```
+
+### 7. Session Statistics — Record start/end timestamps
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "startup",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'echo \"{\\\"start\\\": \\\"$(date -Iseconds)\\\", \\\"session_id\\\": \\\"$(cat | jq -r .session_id)\\\"}\" >> ~/.claude/session-stats.jsonl'"
+      }]
+    }],
+    "SessionEnd": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'echo \"{\\\"end\\\": \\\"$(date -Iseconds)\\\", \\\"session_id\\\": \\\"$(cat | jq -r .session_id)\\\"}\" >> ~/.claude/session-stats.jsonl'"
+      }]
+    }]
+  }
+}
+```
+
+### 8. Pre-Compaction Backup — Save transcript before context compression
+
+```json
+{
+  "hooks": {
+    "PreCompact": [{
+      "matcher": "auto",
+      "hooks": [{
+        "type": "command",
+        "command": "bash -c 'INPUT=$(cat); cp \"$(echo $INPUT | jq -r .transcript_path)\" \"$(echo $INPUT | jq -r .transcript_path).bak.$(date +%s)\"'"
+      }]
+    }]
+  }
+}
+```
+
+---
+
+## Security Threat Model Mapping
+
+| Threat | Attack Example | Defense Hook | Handler |
+|--------|---------------|--------------|---------|
+| **Command injection** | `rm -rf /`, `DROP TABLE` | `PreToolUse` (Bash) | command / prompt |
+| **Sensitive file access** | `.env`, `credentials.json` read/write | `PreToolUse` (Read/Write/Edit) | command |
+| **Data exfiltration** | Sending sensitive output externally | `PostToolUse` | command / prompt |
+| **Over-permissioning** | Auto-approving unnecessary permissions | `PermissionRequest` | command / prompt |
+| **Prompt injection** | Malicious instructions in user input | `UserPromptSubmit` | prompt / agent |
+| **Resource exhaustion** | Infinite loops, mass subagent spawning | `SubagentStart` + timeout | command |
+| **Config tampering** | Unauthorized security config changes | `ConfigChange` | command |
+
+---
+
+## Output Control Reference
+
+### Exit codes (command handler)
+
+| Code | Behavior |
+|------|----------|
+| `0` | Success / Allow (use JSON output for fine-grained control) |
+| `2` | Block / Deny (stderr used as error message) |
+| Other | Treated as hook error |
+
+### decision field (JSON output)
+
+```json
+{ "decision": "block", "reason": "Policy violation" }
+```
+
+Blockable events: `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `Stop`, `SubagentStop`, `ConfigChange`
+
+### continue field (TaskCompleted / TeammateIdle)
+
+```json
+{ "continue": false, "stopReason": "Test failed" }
+```
+
+---
+
+## Configuration File Locations
+
+| Level | Path | Scope |
+|-------|------|-------|
+| User | `~/.claude/settings.json` | All projects |
+| Project | `.claude/settings.json` | Current project only |
+| Skill/Plugin | `hooks/hooks.json` | Within skill only |
+
+Managed settings (`managedHooks` in `~/.claude/settings.json`) can enforce hooks across teams.
+
+---
+
+## Debugging Tips
+
+1. **Dry run** — Pipe JSON directly into your hook script to test:
+   ```bash
+   echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | bash .claude/hooks/my-hook.sh
+   ```
+
+2. **Log separation** — stderr goes to Claude Code logs; stdout is for control output only
+
+3. **Timeouts** — Default timeouts are short. Set `timeout` explicitly for heavy operations
+
+4. **Execution order** — Multiple hooks on the same event run sequentially in array order. First block decision stops execution
+
+5. **`/hooks` command** — Type `/hooks` in Claude Code to launch the interactive configuration UI

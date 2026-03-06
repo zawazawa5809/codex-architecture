@@ -1,0 +1,66 @@
+---
+import { getEntry, render } from "astro:content";
+import DocsLayout from "../../../layouts/DocsLayout.astro";
+import HooksEventMap from "../../../diagrams/HooksEventMap.tsx";
+import { getLocalePath, type Lang } from "../../../i18n/utils";
+
+const lang = "en" as Lang;
+
+const entry = await getEntry("claude_en", "04a-hooks-cheatsheet");
+if (!entry) throw new Error("Content not found: claude_en/04a-hooks-cheatsheet");
+const { Content } = await render(entry);
+
+const accentVar = "var(--color-accent-rose)";
+const hooksUrl = getLocalePath(lang, "/claude/hooks");
+---
+
+<DocsLayout
+  title={`${entry.data.title} — Claude Code`}
+  description={entry.data.description}
+  lang={lang}
+  currentSlug="hooks-cheatsheet"
+  agentName="claude"
+>
+  <nav class="mb-6 text-sm text-[var(--color-text-muted)]" aria-label="Breadcrumb">
+    <a href={hooksUrl} class="hover:text-[var(--color-text-primary)] transition-colors">
+      Hooks
+    </a>
+    <span class="mx-2">/</span>
+    <span class="text-[var(--color-text-secondary)]">Cheatsheet</span>
+  </nav>
+
+  <div class="mb-8 flex items-center gap-3">
+    <span
+      class="flex h-8 w-8 items-center justify-center rounded-lg font-mono text-sm"
+      style={`background: color-mix(in srgb, ${accentVar} 20%, transparent); color: ${accentVar}`}
+    >
+      4
+    </span>
+    <h1 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
+      {entry.data.title}
+    </h1>
+    <span
+      class="rounded-full px-3 py-1 text-xs"
+      style={`background: color-mix(in srgb, ${accentVar} 10%, transparent); color: ${accentVar}`}
+    >
+      Complete Reference
+    </span>
+  </div>
+
+  <div class="mb-10 overflow-x-auto rounded-xl border border-[var(--color-accent-rose)]/20 bg-white/[0.02] p-6" style="touch-action: pinch-zoom">
+    <HooksEventMap client:visible />
+  </div>
+
+  <div class="prose-dark prose prose-lg max-w-none">
+    <Content />
+  </div>
+
+  <div class="mt-12 border-t border-[var(--color-border)] pt-6">
+    <a
+      href={hooksUrl}
+      class="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+    >
+      &larr; Back to Hooks Overview
+    </a>
+  </div>
+</DocsLayout>

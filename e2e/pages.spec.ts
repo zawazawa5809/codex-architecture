@@ -12,6 +12,9 @@ const pages = [
   { path: "./codex/sandbox", title: /.*Codex CLI/ },
   { path: "./en/codex/overview", title: /.*Codex CLI/ },
   { path: "./en/codex/takeaways", title: /.*Codex CLI/ },
+  // Claude Code pages
+  { path: "./claude/hooks-cheatsheet", title: /.*Claude Code/ },
+  { path: "./en/claude/hooks-cheatsheet", title: /.*Claude Code/ },
 ];
 
 for (const { path, title } of pages) {

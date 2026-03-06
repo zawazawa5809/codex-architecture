@@ -11,6 +11,7 @@ export type DiagramKey =
   | "ClaudeMdFlow"
   | "SkillsFlow"
   | "HooksFlow"
+  | "HooksEventMap"
   | "McpIntegration"
   | "PermissionsFlow";
 
