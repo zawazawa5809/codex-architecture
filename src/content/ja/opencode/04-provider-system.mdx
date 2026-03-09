@@ -1,0 +1,140 @@
+---
+title: "プロバイダーシステム"
+order: 4
+description: "AI SDK 75+プロバイダー抽象化、ProviderTransform、モデルメタデータを解説"
+---
+
+{/* プロバイダーシステム */}
+
+## マルチプロバイダーアーキテクチャ
+
+OpenCodeは**Vercel AI SDK**を基盤とし、75以上のLLMプロバイダーに対応する。
+プロバイダーの違いを抽象化し、統一されたインターフェースでLLMにアクセスできる。
+
+```
+┌─────────────────────────────────────────────┐
+│          Provider.AI.generate()             │
+│                    |                         │
+│                    v                         │
+│          ProviderTransform.in()             │
+│         (メッセージ正規化)                   │
+│                    |                         │
+│                    v                         │
+│            Vercel AI SDK                     │
+│          /    |    |    \                    │
+│         v     v    v     v                   │
+│  Anthropic OpenAI Gemini Ollama  ...75+     │
+│         \     |    |     /                   │
+│          v    v    v    v                    │
+│          ProviderTransform.out()            │
+│         (レスポンス正規化)                   │
+│                    |                         │
+│                    v                         │
+│          統一されたレスポンス                │
+└─────────────────────────────────────────────┘
+```
+
+## 対応プロバイダー
+
+主要なプロバイダーの一覧を以下に示す。
+
+| カテゴリ | プロバイダー |
+|----------|-------------|
+| ファーストパーティ | Anthropic, OpenAI, Google Gemini |
+| クラウド | Azure OpenAI, AWS Bedrock, Google Vertex AI |
+| アグリゲーター | OpenRouter, Together AI, Groq |
+| 専門 | Mistral, Cohere |
+| ローカル | Ollama, LM Studio |
+
+## ProviderTransform
+
+プロバイダーごとにAPIの仕様やメッセージ形式が異なる。
+`ProviderTransform` はこの差異を吸収するための変換レイヤーである。
+
+### ProviderTransform.in()（入力変換）
+
+LLMにリクエストを送信する前に、メッセージを各プロバイダーの形式に変換する。
+
+- **システムプロンプトの配置**: プロバイダーによって `system` メッセージの扱いが異なる
+- **ツール定義の変換**: ツールスキーマのフォーマットをプロバイダーに合わせる
+- **画像データの形式変換**: base64 / URL参照の切り替え
+
+### ProviderTransform.out()（出力変換）
+
+LLMからのレスポンスを統一フォーマットに正規化する。
+
+- **ツール呼び出しの解析**: プロバイダーごとに異なるツール呼び出し形式を統一する
+- **ストリーミングチャンクの正規化**: SSEイベントの形式を統一する
+- **メタデータの抽出**: トークン使用量、完了理由などを統一スキーマに変換する
+
+## Models.dev メタデータ
+
+OpenCodeは**Models.dev**からモデルのメタデータを取得する。
+これにより、各モデルの能力や制約を動的に把握できる。
+
+| メタデータ | 説明 | 用途 |
+|-----------|------|------|
+| `contextWindow` | コンテキストウィンドウサイズ | コンテキスト圧縮の閾値決定 |
+| `maxOutputTokens` | 最大出力トークン数 | レスポンス長の制御 |
+| `supportsImages` | 画像入力対応 | マルチモーダル機能の切り替え |
+| `supportsTools` | ツール使用対応 | エージェントモードの判定 |
+| `pricing` | 料金情報 | コスト表示 |
+
+## プロンプトキャッシング
+
+対応するプロバイダーでは**プロンプトキャッシング**を活用してコストとレイテンシーを削減する。
+
+```
+初回リクエスト:
+  システムプロンプト (キャッシュ対象) + ユーザーメッセージ
+  → 全トークンを処理 → レスポンス + キャッシュID
+
+2回目以降:
+  キャッシュID + 差分メッセージ
+  → キャッシュ部分はスキップ → 高速レスポンス
+```
+
+Anthropicのプロンプトキャッシングでは、システムプロンプトと会話の先頭部分を
+キャッシュすることで、反復的なリクエストのコストを最大90%削減できる。
+
+## Provider.AI.generate()
+
+すべてのLLM呼び出しは `Provider.AI.generate()` を通じてストリーミングで行われる。
+
+```typescript
+{/* 概念的な使用例 */}
+const stream = await Provider.AI.generate({
+  model: "anthropic:claude-sonnet-4-20250514",
+  messages: [...conversationHistory],
+  tools: ToolRegistry.getTools(),
+  onChunk: (chunk) => {
+    // SSEでクライアントにストリーミング
+    Bus.emit("message:chunk", chunk);
+  },
+});
+```
+
+ストリーミングレスポンスはSSEを通じてクライアントにリアルタイムで配信される。
+これにより、ユーザーはLLMの応答を待つことなく逐次的に結果を確認できる。
+
+## プロバイダー設定
+
+```json
+{
+  "provider": {
+    "default": "anthropic",
+    "anthropic": {
+      "apiKey": "env:ANTHROPIC_API_KEY"
+    },
+    "openai": {
+      "apiKey": "env:OPENAI_API_KEY"
+    },
+    "ollama": {
+      "baseUrl": "http://localhost:11434"
+    }
+  }
+}
+```
+
+APIキーは環境変数から読み込む `env:` プレフィックスにより、設定ファイルに
+直接シークレットを記述することなく安全に管理できる。

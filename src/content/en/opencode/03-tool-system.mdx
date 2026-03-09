@@ -1,0 +1,174 @@
+---
+title: "Tool System"
+order: 3
+description: "Built-in tools, permission gates, and MCP extension"
+---
+
+## Tool System Overview
+
+OpenCode's tool system is the bridge between the AI agent and the real world. It provides a structured way for agents to read files, execute commands, search code, and interact with external services. The system is built around three pillars: **built-in tools**, **permission control**, and **MCP extensibility**.
+
+## Built-in Tools
+
+OpenCode ships with a focused set of built-in tools that cover the core needs of a coding agent.
+
+| Tool | Purpose | Mutating |
+|------|---------|----------|
+| `bash` | Execute shell commands | Yes |
+| `read` | Read file contents | No |
+| `write` | Write content to a file | Yes |
+| `edit` | Apply targeted edits to a file | Yes |
+| `grep` | Search file contents with regex | No |
+| `glob` | Find files by pattern matching | No |
+| `ls` | List directory contents | No |
+| `webfetch` | Fetch content from URLs | No |
+| `task` | Spawn a subagent for delegated work | No |
+
+The distinction between **mutating** and **non-mutating** tools is central to the permission system. Read-only tools like `grep` and `ls` can execute freely, while mutating tools like `bash` and `write` must pass through the permission gate.
+
+## ToolRegistry
+
+The `ToolRegistry` is the central hub that aggregates all available tools — built-in, MCP-provided, and plugin-defined — into a single dispatch layer.
+
+```typescript
+class ToolRegistry {
+  private tools: Map<string, ToolHandler>;
+
+  register(name: string, handler: ToolHandler): void {
+    this.tools.set(name, handler);
+  }
+
+  async dispatch(call: ToolCall): Promise<ToolResult> {
+    const handler = this.tools.get(call.name);
+    if (!handler) {
+      return { error: `Unknown tool: ${call.name}` };
+    }
+
+    {/* Permission check before execution */}
+    const permission = await Permission.check(call);
+    if (permission === "deny") {
+      return { error: "Tool execution denied by policy" };
+    }
+    if (permission === "ask") {
+      const approved = await this.requestApproval(call);
+      if (!approved) return { error: "User denied execution" };
+    }
+
+    return handler.execute(call.arguments);
+  }
+}
+```
+
+The registry follows a simple pattern: register handlers at startup, then dispatch calls through a uniform interface that includes permission checks.
+
+## Permission System
+
+Every tool invocation passes through `Permission.check()` before execution. The permission system supports three policies.
+
+```typescript
+type PermissionPolicy = "allow" | "deny" | "ask";
+
+class Permission {
+  static async check(call: ToolCall): Promise<PermissionPolicy> {
+    {/* Check tool-specific policies */}
+    const toolPolicy = this.getToolPolicy(call.name);
+    if (toolPolicy) return toolPolicy;
+
+    {/* Check argument-based policies */}
+    const argPolicy = this.getArgumentPolicy(call);
+    if (argPolicy) return argPolicy;
+
+    {/* Default: ask for mutating tools, allow for read-only */}
+    return call.mutating ? "ask" : "allow";
+  }
+}
+```
+
+### Policy Levels
+
+| Policy | Behavior |
+|--------|----------|
+| `allow` | Execute immediately without user confirmation |
+| `deny` | Block execution and return an error to the agent |
+| `ask` | Pause and request user approval before proceeding |
+
+The default behavior is conservative: read-only tools are allowed automatically, while mutating tools require user approval. This can be customized through configuration.
+
+### Policy Configuration
+
+Policies are configured in `opencode.json` at both the tool level and the argument level.
+
+```json
+{
+  "permissions": {
+    "bash": {
+      "default": "ask",
+      "rules": [
+        { "pattern": "git *", "policy": "allow" },
+        { "pattern": "rm -rf *", "policy": "deny" }
+      ]
+    },
+    "write": {
+      "default": "ask"
+    },
+    "read": {
+      "default": "allow"
+    }
+  }
+}
+```
+
+This allows fine-grained control. For example, `git` commands can be auto-approved while destructive commands like `rm -rf` are blocked entirely.
+
+## MCP Extension
+
+OpenCode extends its tool set through the **Model Context Protocol (MCP)**. External MCP servers expose tools that are registered into the `ToolRegistry` alongside built-in tools.
+
+### Configuration
+
+MCP servers are declared in `opencode.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "github": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {
+          "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+        }
+      },
+      "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"]
+      }
+    }
+  }
+}
+```
+
+### Tool Discovery and Registration
+
+When the server starts, it connects to each configured MCP server, discovers available tools, and registers them in the `ToolRegistry`.
+
+```typescript
+async function registerMcpTools(
+  registry: ToolRegistry,
+  config: McpConfig
+): Promise<void> {
+  for (const [serverName, serverConfig] of Object.entries(config.servers)) {
+    const client = await McpClient.connect(serverConfig);
+    const tools = await client.listTools();
+
+    for (const tool of tools) {
+      registry.register(
+        `mcp__${serverName}__${tool.name}`,
+        new McpToolHandler(client, tool)
+      );
+    }
+  }
+}
+```
+
+MCP tools follow the `mcp__<server>__<tool>` naming convention, ensuring no collisions with built-in tools. They pass through the same permission system as built-in tools, so all security policies apply uniformly.

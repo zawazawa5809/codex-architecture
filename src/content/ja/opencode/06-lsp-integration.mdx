@@ -1,0 +1,153 @@
+---
+title: "LSP連携"
+order: 6
+description: "LSPサーバー管理、診断フィードバック、エージェント統合を解説"
+---
+
+{/* LSP連携 */}
+
+## LSPとは
+
+**Language Server Protocol（LSP）**は、エディタと言語サーバー間の通信を標準化する
+プロトコルである。OpenCodeはLSPを統合することで、型チェック、診断情報、
+コード補完などの言語機能をエージェントの意思決定に活用する。
+
+## LSP.Manager
+
+`LSP.Manager` は言語サーバーのライフサイクルを管理する中核コンポーネントである。
+
+```
+┌────────────────────────────────────────┐
+│              LSP.Manager               │
+│                                        │
+│  ┌──────────┐  ┌──────────┐           │
+│  │ 検出     │→│ 起動     │           │
+│  │ (detect) │  │ (spawn)  │           │
+│  └──────────┘  └────┬─────┘           │
+│                      │                 │
+│            ┌─────────┼─────────┐       │
+│            v         v         v       │
+│     ┌──────────┐ ┌───────┐ ┌──────┐   │
+│     │TypeScript│ │Python │ │ Go   │   │
+│     │  Server  │ │Server │ │Server│   │
+│     └──────────┘ └───────┘ └──────┘   │
+└────────────────────────────────────────┘
+```
+
+### 自動検出
+
+LSP.Managerはプロジェクトのファイル構成から適切な言語サーバーを自動検出する。
+
+| 検出対象 | 言語サーバー | トリガーファイル |
+|----------|-------------|----------------|
+| TypeScript/JavaScript | `typescript-language-server` | `tsconfig.json`, `package.json` |
+| Python | `pyright`, `pylsp` | `pyproject.toml`, `setup.py` |
+| Go | `gopls` | `go.mod` |
+| Rust | `rust-analyzer` | `Cargo.toml` |
+
+検出後、インストール済みの言語サーバーを自動的にサブプロセスとして起動する。
+
+## LSPの機能
+
+OpenCodeが活用するLSPの主要機能を以下に示す。
+
+### 診断（Diagnostics）
+
+コードのエラーや警告をリアルタイムで取得する。
+
+```
+ファイル保存 / 編集
+       |
+       v
+言語サーバー: 診断を実行
+       |
+       v
+EventLspClientDiagnostics: 診断結果をストリーム
+       |
+       v
+エージェント: 診断結果を参照して次のアクションを決定
+```
+
+たとえば、エージェントがコードを編集した後に型エラーが発生した場合、
+診断情報を基に自動的に修正を試みることができる。
+
+### フォーマット（Formatting）
+
+言語サーバーのフォーマッターを使用してコードを整形する。
+エージェントが生成したコードをプロジェクトのスタイルに自動的に合わせられる。
+
+### ホバー（Hover）
+
+シンボルにカーソルを合わせた際の型情報やドキュメントを取得する。
+エージェントがコードを分析する際に、関数のシグネチャや型定義を正確に把握できる。
+
+### 定義へ移動（Go to Definition）
+
+シンボルの定義元を特定する。エージェントがコードベースを探索する際に、
+関数やクラスの実装を効率的に追跡できる。
+
+## EventLspClientDiagnostics
+
+`EventLspClientDiagnostics` は、言語サーバーからの診断情報をイベントストリームとして
+クライアントに配信するコンポーネントである。
+
+```typescript
+{/* 診断イベントの概念 */}
+// 診断結果の構造
+interface Diagnostic {
+  file: string;      // ファイルパス
+  line: number;      // 行番号
+  column: number;    // 列番号
+  severity: "error" | "warning" | "info" | "hint";
+  message: string;   // 診断メッセージ
+  source: string;    // 診断元 (typescript, eslint, etc.)
+}
+```
+
+### 診断フィードバックループ
+
+エージェントは診断情報を活用して、より正確なコード生成を行う。
+
+```
+1. エージェントがコードを生成・編集
+       |
+       v
+2. 言語サーバーが診断を実行
+       |
+       v
+3. EventLspClientDiagnostics が結果をストリーム
+       |
+       v
+4. エージェントが診断結果を確認
+       |
+       v
+5. エラーがあれば修正を試みる → ステップ1へ
+       |
+       v
+6. エラーなし → 完了
+```
+
+このフィードバックループにより、エージェントは人間の開発者がIDEで行うのと
+同様のワークフロー（書く→エラー確認→修正）を自律的に実行できる。
+
+## opencode.json でのLSP設定
+
+```json
+{
+  "lsp": {
+    "typescript": {
+      "enabled": true,
+      "command": "typescript-language-server",
+      "args": ["--stdio"]
+    },
+    "python": {
+      "enabled": true,
+      "command": "pyright-langserver",
+      "args": ["--stdio"]
+    }
+  }
+}
+```
+
+自動検出に加えて、`opencode.json` で明示的に言語サーバーを設定することもできる。
+カスタムの言語サーバーや、特定のオプションを指定する場合に有用である。

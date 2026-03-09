@@ -27,9 +27,21 @@ const claudeEn = defineCollection({
   schema: docsSchema,
 });
 
+const opencodeJa = defineCollection({
+  loader: glob({ pattern: "**/*.mdx", base: "./src/content/ja/opencode" }),
+  schema: docsSchema,
+});
+
+const opencodeEn = defineCollection({
+  loader: glob({ pattern: "**/*.mdx", base: "./src/content/en/opencode" }),
+  schema: docsSchema,
+});
+
 export const collections = {
   codex_ja: codexJa,
   codex_en: codexEn,
   claude_ja: claudeJa,
   claude_en: claudeEn,
+  opencode_ja: opencodeJa,
+  opencode_en: opencodeEn,
 };

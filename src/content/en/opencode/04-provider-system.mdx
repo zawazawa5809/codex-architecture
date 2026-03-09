@@ -1,0 +1,159 @@
+---
+title: "Provider System"
+order: 4
+description: "AI SDK 75+ provider abstraction, ProviderTransform, and model metadata"
+---
+
+## Provider Abstraction
+
+One of OpenCode's most powerful features is its **provider-agnostic design**. Through the Vercel AI SDK, OpenCode supports over 75 LLM providers out of the box. Users can switch between Anthropic, OpenAI, Google Gemini, local models, and dozens more without changing any application code.
+
+## Supported Providers
+
+OpenCode integrates with a broad ecosystem of LLM providers.
+
+| Category | Providers |
+|----------|-----------|
+| **Major Cloud** | Anthropic, OpenAI, Google Gemini, Azure OpenAI |
+| **AWS** | Amazon Bedrock (Claude, Titan, Mistral) |
+| **Aggregators** | OpenRouter, Together AI |
+| **Specialized** | Groq, Mistral, Cohere |
+| **Local** | Ollama, LM Studio |
+| **Other** | Any OpenAI-compatible endpoint |
+
+This breadth is achieved through the **Vercel AI SDK**, which provides a unified interface for text generation, streaming, and tool calling across all providers.
+
+## Vercel AI SDK Integration
+
+The Vercel AI SDK serves as the abstraction layer between OpenCode's agent system and the underlying LLM providers. It normalizes the differences between provider APIs into a consistent interface.
+
+```typescript
+import { generateText, streamText } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
+
+{/* Same interface regardless of provider */}
+const result = await streamText({
+  model: anthropic("claude-sonnet-4-20250514"),
+  messages: conversationHistory,
+  tools: registeredTools,
+});
+
+{/* Switching providers requires only changing the model */}
+const result2 = await streamText({
+  model: openai("gpt-4o"),
+  messages: conversationHistory,
+  tools: registeredTools,
+});
+```
+
+The agent code never interacts with provider-specific APIs directly. It always goes through the AI SDK's `generateText` or `streamText` functions.
+
+## ProviderTransform
+
+Different providers have different expectations for message formats, tool call structures, and system prompt handling. **`ProviderTransform`** normalizes these differences before messages reach the provider.
+
+```typescript
+class ProviderTransform {
+  transform(
+    messages: Message[],
+    provider: ProviderConfig
+  ): TransformedMessages {
+    let transformed = messages;
+
+    {/* Normalize system messages */}
+    transformed = this.normalizeSystemMessages(transformed, provider);
+
+    {/* Adapt tool call format */}
+    transformed = this.normalizeToolCalls(transformed, provider);
+
+    {/* Handle provider-specific quirks */}
+    transformed = this.applyProviderQuirks(transformed, provider);
+
+    return transformed;
+  }
+}
+```
+
+### Common Transformations
+
+| Transformation | Purpose |
+|---------------|---------|
+| System message normalization | Some providers expect system prompts as a separate parameter, others inline |
+| Tool call format adaptation | Different providers use different JSON structures for tool calls |
+| Message role mapping | Map between provider-specific role names |
+| Token counting adjustments | Account for provider-specific tokenization differences |
+| Image format conversion | Handle varying multi-modal input requirements |
+
+## Model Metadata: Models.dev
+
+OpenCode uses **Models.dev** as its source of truth for model metadata. This external registry provides up-to-date information about each model's capabilities.
+
+```typescript
+interface ModelMetadata {
+  id: string;
+  provider: string;
+  contextWindow: number;
+  maxOutputTokens: number;
+  supportsTools: boolean;
+  supportsVision: boolean;
+  supportsStreaming: boolean;
+  pricing: {
+    inputPerMillion: number;
+    outputPerMillion: number;
+  };
+}
+```
+
+This metadata drives several runtime decisions:
+
+- **Context window management**: The compaction system knows when to trigger based on the model's context limit
+- **Tool support detection**: Only models that support tool calling are used for agentic tasks
+- **Cost estimation**: Token usage can be translated to approximate costs
+- **Capability routing**: Vision-capable models are preferred when the task involves images
+
+## Provider Configuration
+
+Providers are configured through environment variables and `opencode.json`.
+
+```json
+{
+  "provider": {
+    "default": "anthropic",
+    "models": {
+      "plan": "claude-sonnet-4-20250514",
+      "build": "claude-sonnet-4-20250514",
+      "general": "claude-sonnet-4-20250514"
+    },
+    "anthropic": {
+      "apiKey": "${ANTHROPIC_API_KEY}"
+    },
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}"
+    }
+  }
+}
+```
+
+Each agent type (Plan, Build, General) can be assigned a different model, allowing users to optimize for cost and capability. For example, a smaller model for planning and a more capable model for complex code generation.
+
+## Provider Selection Flow
+
+```
+Agent Request
+    │
+    ├── Determine agent type (plan/build/general)
+    │
+    ├── Look up configured model for agent type
+    │
+    ├── Fetch model metadata from Models.dev
+    │
+    ├── Initialize provider via Vercel AI SDK
+    │
+    ├── Apply ProviderTransform to messages
+    │
+    └── Stream response back to agent loop
+```
+
+This layered approach means OpenCode can adopt new providers as soon as the Vercel AI SDK supports them, without any changes to the core agent logic.

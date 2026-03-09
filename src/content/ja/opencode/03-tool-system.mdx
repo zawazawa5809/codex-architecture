@@ -1,0 +1,138 @@
+---
+title: "ツールシステム"
+order: 3
+description: "ビルトインツール群、Permission Gate、MCP拡張を解説"
+---
+
+{/* ツールシステム */}
+
+## ビルトインツール
+
+OpenCodeは9つのビルトインツールを標準搭載している。
+これらはエージェントがコードベースを操作するための基本的な機能を提供する。
+
+| ツール | 説明 | 主な用途 |
+|--------|------|----------|
+| `bash` | シェルコマンドを実行する | ビルド、テスト、Git操作 |
+| `read` | ファイルの内容を読み取る | コード調査、設定確認 |
+| `write` | ファイルを新規作成する | 新規ファイル生成 |
+| `edit` | ファイルの特定箇所を編集する | コード修正、リファクタリング |
+| `grep` | 正規表現でテキスト検索する | パターン検索、参照調査 |
+| `glob` | パターンでファイルを検索する | ファイル構造の調査 |
+| `ls` | ディレクトリの内容を一覧する | ファイル構造の確認 |
+| `webfetch` | URLからコンテンツを取得する | ドキュメント参照、API確認 |
+| `task` | サブエージェントを生成する | タスクの委譲、並列処理 |
+
+## ToolRegistry
+
+すべてのツールは `ToolRegistry` によって一元管理される。
+ToolRegistryは3つのソースからツールを集約する。
+
+```
+┌─────────────────────────────────────────┐
+│             ToolRegistry                │
+│                                         │
+│  ┌───────────┐  ┌──────┐  ┌─────────┐  │
+│  │ Built-in  │  │ MCP  │  │ Plugin  │  │
+│  │  Tools    │  │Tools │  │ Tools   │  │
+│  └───────────┘  └──────┘  └─────────┘  │
+│         \          |         /          │
+│          \         |        /           │
+│           v        v       v            │
+│        [統合されたツール一覧]            │
+│              |                          │
+│              v                          │
+│       Permission.check()               │
+│              |                          │
+│              v                          │
+│          ツール実行                     │
+└─────────────────────────────────────────┘
+```
+
+エージェントがツールを呼び出す際、ToolRegistryがツールの解決とディスパッチを担当する。
+
+## Permission Gate
+
+すべてのツール実行は `Permission.check()` を経由する。
+これにより、危険な操作を事前にブロックまたはユーザーに確認できる。
+
+### 3つのポリシー
+
+| ポリシー | 動作 | ユースケース |
+|----------|------|-------------|
+| `allow` | 自動的に実行を許可する | `read`, `grep`, `glob` など読み取り専用操作 |
+| `deny` | 自動的に実行を拒否する | 特定のコマンドのブロック |
+| `ask` | ユーザーに確認を求める | `bash`, `write`, `edit` など書き込み操作 |
+
+### Permission設定例
+
+```json
+{
+  "permissions": {
+    "bash": "ask",
+    "read": "allow",
+    "write": "ask",
+    "edit": "ask",
+    "grep": "allow",
+    "glob": "allow",
+    "ls": "allow",
+    "webfetch": "allow",
+    "task": "allow"
+  }
+}
+```
+
+### 実行フロー
+
+```
+エージェント: "bash rm -rf node_modules" を実行したい
+       |
+       v
+Permission.check("bash", { command: "rm -rf node_modules" })
+       |
+       v
+ポリシー判定: bash → "ask"
+       |
+       v
+ユーザーに確認: "rm -rf node_modules を実行しますか？ [y/n]"
+       |
+       v
+ユーザー承認 → 実行 / ユーザー拒否 → スキップ
+```
+
+## MCP拡張
+
+OpenCodeは**Model Context Protocol（MCP）**を通じて外部ツールを統合できる。
+MCPサーバーを `opencode.json` に登録することで、ビルトインツールと同様に使用可能になる。
+
+### MCP設定
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "github": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "env": {
+          "GITHUB_TOKEN": "env:GITHUB_TOKEN"
+        }
+      },
+      "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"]
+      }
+    }
+  }
+}
+```
+
+### MCPツールの統合フロー
+
+1. OpenCode起動時に `opencode.json` のMCP設定を読み込む
+2. 各MCPサーバーをサブプロセスとして起動する
+3. MCPプロトコルでツール一覧を取得する
+4. ToolRegistryにMCPツールを登録する
+5. エージェントからビルトインツールと同等に呼び出せるようになる
+
+MCPツールにもPermission Gateが適用されるため、セキュリティは一貫して保たれる。

@@ -1,0 +1,197 @@
+---
+title: "Session & Storage"
+order: 7
+description: "Session persistence, snapshots, and context compaction"
+---
+
+## Session Management
+
+Every interaction with OpenCode happens within a **session**. Sessions are the fundamental unit of state, containing the full conversation history, tool results, and agent decisions. The session system provides persistence, recovery, and lifecycle management.
+
+## Session API
+
+The `Session` class exposes a clean interface for managing conversation state.
+
+```typescript
+class Session {
+  static async create(): Promise<Session>;
+  static async get(id: string): Promise<Session | null>;
+
+  async messages(): Promise<MessageV2[]>;
+  async addMessage(message: MessageV2): Promise<void>;
+  async destroy(): Promise<void>;
+}
+```
+
+### Core Operations
+
+| Method | Purpose |
+|--------|---------|
+| `Session.create()` | Start a new conversation session |
+| `Session.get(id)` | Resume an existing session by ID |
+| `session.messages()` | Retrieve the full message history |
+| `session.addMessage()` | Append a new message to the session |
+| `session.destroy()` | Delete the session and all associated data |
+
+## SQLite Storage via Drizzle ORM
+
+All session data is persisted in a local **SQLite** database, managed through **Drizzle ORM**. This provides type-safe database access with zero external dependencies — no database server required.
+
+```typescript
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+
+const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  title: text("title"),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+  updatedAt: integer("updated_at", { mode: "timestamp" }),
+});
+
+const messages = sqliteTable("messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").references(() => sessions.id),
+  role: text("role"),       {/* "user" | "assistant" | "tool" */}
+  content: text("content"),
+  toolCalls: text("tool_calls", { mode: "json" }),
+  metadata: text("metadata", { mode: "json" }),
+  createdAt: integer("created_at", { mode: "timestamp" }),
+});
+```
+
+### MessageV2 Schema
+
+The `MessageV2` schema is OpenCode's message format, designed to capture all aspects of a conversation turn.
+
+```typescript
+interface MessageV2 {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant" | "tool";
+  content: string;
+  toolCalls?: ToolCall[];
+  toolResults?: ToolResult[];
+  metadata: {
+    model?: string;
+    provider?: string;
+    tokens?: { input: number; output: number };
+    duration?: number;
+    compacted?: boolean;
+  };
+  createdAt: Date;
+}
+```
+
+The `metadata` field captures per-message telemetry: which model generated it, token usage, and whether the message is a compaction summary.
+
+## Git-Based Undo/Redo
+
+OpenCode implements **undo/redo** through Git snapshots. Before each mutating tool execution, the system captures the current state of the workspace.
+
+```typescript
+class GitSnapshot {
+  async capture(label: string): Promise<SnapshotId> {
+    {/* Stage all current changes */}
+    await this.git.add(".");
+
+    {/* Create a snapshot commit */}
+    const commitId = await this.git.commit(
+      `opencode: snapshot before ${label}`
+    );
+
+    return commitId;
+  }
+
+  async restore(snapshotId: SnapshotId): Promise<void> {
+    {/* Reset to the snapshot state */}
+    await this.git.reset(snapshotId, { hard: true });
+  }
+}
+```
+
+### Undo/Redo Flow
+
+```
+User: "Refactor the auth module"
+    │
+    ├── Snapshot A (before changes)
+    │
+    ├── Agent modifies files
+    │
+    ├── Snapshot B (after changes)
+    │
+    └── User: "Undo that"
+         │
+         └── Restore Snapshot A
+```
+
+This approach leverages Git's proven reliability for state management. Snapshots are lightweight (Git only stores diffs), and the user can inspect the exact changes made at each step using standard Git tools.
+
+## Context Compaction
+
+Long conversations can exceed the model's context window. **`SessionCompaction.compact()`** addresses this by summarizing older messages while preserving recent context.
+
+### How Compaction Works
+
+```typescript
+class SessionCompaction {
+  private threshold = 50;     {/* Message count trigger */}
+  private keepRecent = 10;    {/* Messages to preserve verbatim */}
+
+  async compact(session: Session): Promise<void> {
+    const messages = await session.messages();
+    if (messages.length < this.threshold) return;
+
+    const splitPoint = messages.length - this.keepRecent;
+    const toCompact = messages.slice(0, splitPoint);
+    const toKeep = messages.slice(splitPoint);
+
+    {/* Generate summary using the LLM */}
+    const summary = await this.generateSummary(toCompact);
+
+    {/* Replace compacted messages with summary */}
+    await session.replaceMessages([
+      {
+        role: "assistant",
+        content: summary,
+        metadata: { compacted: true },
+      },
+      ...toKeep,
+    ]);
+  }
+}
+```
+
+### Compaction Strategy
+
+| Phase | Action |
+|-------|--------|
+| **Detection** | Check if message count exceeds threshold |
+| **Partitioning** | Split into old (compactable) and recent (preserved) messages |
+| **Summarization** | LLM generates a concise summary of the old messages |
+| **Replacement** | Old messages are replaced with the summary message |
+| **Marking** | Summary message is flagged with `compacted: true` in metadata |
+
+The summary preserves critical information: decisions made, files modified, tool results, and any errors encountered. This ensures the agent retains enough context to continue coherently.
+
+## Session Lifecycle
+
+```
+Create Session
+    │
+    ├── Chat Messages ←→ Agent Loop
+    │       │
+    │       ├── Messages stored in SQLite
+    │       ├── Snapshots captured in Git
+    │       └── Compaction when threshold reached
+    │
+    ├── Resume Session (Session.get)
+    │       │
+    │       └── Load messages from SQLite
+    │           Restore context for agent
+    │
+    └── Destroy Session
+            │
+            └── Delete messages, clean up snapshots
+```
+
+The combination of SQLite persistence, Git snapshots, and context compaction gives OpenCode a robust foundation for long-running, resumable coding sessions.

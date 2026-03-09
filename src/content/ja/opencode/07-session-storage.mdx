@@ -1,0 +1,154 @@
+---
+title: "セッション管理"
+order: 7
+description: "セッション永続化、スナップショット、コンテキスト圧縮を解説"
+---
+
+{/* セッション管理 */}
+
+## セッションライフサイクル
+
+OpenCodeのセッションは、ユーザーとエージェント間の会話を単位とした
+永続的なデータ構造である。セッションは以下のライフサイクルを持つ。
+
+```
+Session.create()  →  Session.get()  →  Session.messages()  →  Session.destroy()
+    |                    |                    |                      |
+    v                    v                    v                      v
+  新規作成           既存取得           メッセージ取得           削除
+```
+
+### 主要API
+
+| メソッド | 説明 |
+|----------|------|
+| `Session.create()` | 新しいセッションを作成する |
+| `Session.get(id)` | IDでセッションを取得する |
+| `Session.messages(id)` | セッションのメッセージ一覧を取得する |
+| `Session.destroy(id)` | セッションを削除する |
+| `Session.list()` | すべてのセッションを一覧する |
+
+## SQLite + Drizzle ORM
+
+セッションデータは**SQLite**データベースに永続化される。
+ORMには**Drizzle ORM**を使用し、型安全なデータベース操作を実現する。
+
+```typescript
+{/* Drizzle ORMスキーマの概念 */}
+// セッションテーブル
+const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  title: text("title"),
+  createdAt: integer("created_at"),
+  updatedAt: integer("updated_at"),
+});
+
+// メッセージテーブル
+const messages = sqliteTable("messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").references(() => sessions.id),
+  role: text("role"),       // "user" | "assistant" | "system"
+  content: text("content"),
+  metadata: text("metadata"),
+  createdAt: integer("created_at"),
+});
+```
+
+SQLiteはファイルベースのデータベースであるため、外部のデータベースサーバーを
+必要とせず、OpenCodeの起動だけでデータ永続化が機能する。
+
+## MessageV2 スキーマ
+
+メッセージは `MessageV2` スキーマで管理される。テキスト応答、ツール呼び出し、
+ツール結果など、多様なメッセージタイプを統一的に扱う。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `id` | string | メッセージの一意識別子 |
+| `sessionId` | string | 所属するセッションID |
+| `role` | string | 送信者の役割（user / assistant / system） |
+| `content` | string / object | メッセージの内容 |
+| `toolCalls` | array | ツール呼び出しの配列（assistant のみ） |
+| `toolResults` | array | ツール実行結果の配列 |
+| `metadata` | object | トークン使用量、モデル名などのメタデータ |
+| `createdAt` | number | 作成タイムスタンプ |
+
+## Gitベースのスナップショット
+
+OpenCodeは**Gitを利用したundo/redo**機能を提供する。
+エージェントがファイルを変更するたびに、Gitスナップショットが作成される。
+
+```
+[初期状態] ← snapshot_0
+     |
+     v
+エージェント: src/utils.ts を編集
+     |
+     v
+[変更後] ← snapshot_1
+     |
+     v
+エージェント: src/utils.test.ts を作成
+     |
+     v
+[変更後] ← snapshot_2
+     |
+     v
+ユーザー: undo! (snapshot_1 に戻る)
+     |
+     v
+ユーザー: redo! (snapshot_2 に進む)
+```
+
+### スナップショットの仕組み
+
+1. ツール実行前にGitの現在の状態を記録する
+2. ツール実行後にGitコミット（内部用）を作成する
+3. undo要求時に該当のコミットを `git checkout` で復元する
+4. redo要求時に次のスナップショットに `git checkout` で進む
+
+これにより、エージェントの変更を安全に取り消し・やり直しでき、
+実験的なコード変更も気軽に試すことができる。
+
+## SessionCompaction.compact()
+
+長時間のセッションではコンテキストウィンドウが圧迫される。
+`SessionCompaction.compact()` は古いメッセージを要約してコンテキストを圧縮する。
+
+### 圧縮プロセス
+
+```
+圧縮前:
+  [msg_1] [msg_2] [msg_3] ... [msg_50] [msg_51] ... [msg_60]
+   ↑ 古いメッセージ群 (圧縮対象)  ↑     ↑ 最近のメッセージ群 ↑
+
+       ↓ compact() 実行
+
+圧縮後:
+  [summary] [msg_51] ... [msg_60]
+   ↑ 要約     ↑ 最近のメッセージ群 (そのまま)
+```
+
+### サマリー生成
+
+圧縮対象のメッセージ群からLLMを使ってサマリーを生成する。
+サマリーには以下の情報が含まれる。
+
+- **タスクの目的**: 何を達成しようとしていたか
+- **完了したステップ**: これまでに行った作業
+- **重要な決定事項**: 設計上の判断や選択
+- **現在の状態**: ファイルの変更状況、未解決の問題
+
+サマリーはシステムメッセージとしてコンテキストの先頭に配置され、
+エージェントは圧縮前と同様の文脈で作業を継続できる。
+
+## データの保存場所
+
+OpenCodeのデータは以下のディレクトリに保存される。
+
+| データ | パス | 説明 |
+|--------|------|------|
+| 設定 | `~/.config/opencode/` | グローバル設定 |
+| データベース | `~/.local/share/opencode/` | SQLiteファイル |
+| プロジェクト設定 | `./opencode.json` | プロジェクト固有の設定 |
+| ログ | `~/.local/state/opencode/` | 実行ログ |

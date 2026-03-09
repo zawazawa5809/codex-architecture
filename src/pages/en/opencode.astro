@@ -1,0 +1,99 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { useTranslation, getLocalePath, type Lang } from "../../i18n/utils";
+import { opencodeSections } from "../../data/opencode-sections";
+
+const lang = "en" as Lang;
+const t = useTranslation(lang);
+
+function sectionUrl(slug: string): string {
+  return getLocalePath(lang, `/opencode/${slug}`);
+}
+---
+
+<BaseLayout title={`OpenCode — ${t("site.title")}`} description={t("index.opencodeDesc" as any)} lang={lang} activeAgent="opencode">
+  <section class="relative overflow-hidden pb-12 pt-32">
+    <div class="pointer-events-none absolute left-1/4 top-0 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-[var(--color-accent-indigo)] opacity-[0.07] blur-[120px]"></div>
+    <div class="relative mx-auto max-w-4xl px-4 text-center">
+      <h1 class="hero-enter mb-4 text-4xl font-bold tracking-tight md:text-5xl">
+        <span class="text-[var(--color-text-primary)]">OpenCode</span>
+        <br />
+        <span class="bg-gradient-to-r from-[var(--color-accent-indigo)] to-[var(--color-accent-cyan)] bg-clip-text text-transparent">
+          Architecture Guide
+        </span>
+      </h1>
+      <p class="hero-enter-delay-1 mx-auto mb-8 max-w-2xl text-lg text-[var(--color-text-secondary)]">
+        {t("index.opencodeDesc" as any)}
+      </p>
+    </div>
+  </section>
+
+  <section class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-4xl px-4">
+      <h2 class="mb-8 text-center text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
+        Sections
+      </h2>
+      <div class="reveal space-y-3">
+        {
+          opencodeSections.map((section) => {
+            const accentVar = `var(--color-accent-${section.accent})`;
+            return (
+              <a
+                href={sectionUrl(section.slug)}
+                class="card-hover flex items-center gap-4 rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-5 hover:border-[var(--color-accent-indigo)]/50 hover:bg-white/[0.04]"
+              >
+                <span
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-sm"
+                  style={`background: color-mix(in srgb, ${accentVar} 20%, transparent); color: ${accentVar}`}
+                >
+                  {section.number}
+                </span>
+                <span class="text-[var(--color-text-primary)]">
+                  {t(section.navKey as any)}
+                </span>
+                {section.badge && (
+                  <span
+                    class="rounded-full px-2 py-0.5 text-[10px]"
+                    style={`background: color-mix(in srgb, ${accentVar} 10%, transparent); color: ${accentVar}`}
+                  >
+                    {section.badge[lang]}
+                  </span>
+                )}
+                <span class="ml-auto text-[var(--color-text-muted)]">&rarr;</span>
+              </a>
+            );
+          })
+        }
+      </div>
+    </div>
+  </section>
+
+  <section id="references" class="border-t border-[var(--color-border)] py-20">
+    <div class="mx-auto max-w-4xl px-4">
+      <h2 class="mb-8 text-2xl font-bold text-[var(--color-text-primary)]">References</h2>
+      <div class="rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6">
+        <h3 class="mb-3 text-sm font-semibold text-[var(--color-accent-cyan)]">Links</h3>
+        <ul class="space-y-2 text-sm text-[var(--color-text-secondary)]">
+          <li>
+            <a href="https://opencode.ai" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+              OpenCode Official Website
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/anomalyco/opencode" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+              GitHub Repository (MIT License)
+            </a>
+          </li>
+          <li>
+            <a href="https://models.dev" class="text-[var(--color-accent-cyan)] hover:underline" target="_blank" rel="noopener noreferrer">
+              Models.dev — Provider Catalog
+            </a>
+          </li>
+        </ul>
+        <p class="mt-4 text-xs text-[var(--color-text-muted)]">
+          This site is an independent educational resource and is not affiliated with or endorsed by Anomaly.
+        </p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

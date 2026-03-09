@@ -13,7 +13,15 @@ export type DiagramKey =
   | "HooksFlow"
   | "HooksEventMap"
   | "McpIntegration"
-  | "PermissionsFlow";
+  | "PermissionsFlow"
+  // OpenCode
+  | "OpencodeOverview"
+  | "OpencodeAgentSystem"
+  | "OpencodeToolSystem"
+  | "OpencodeProviderSystem"
+  | "OpencodeTuiArch"
+  | "OpencodeLspIntegration"
+  | "OpencodeSessionStorage";
 
 export type AccentColor = "indigo" | "rose" | "emerald";
 

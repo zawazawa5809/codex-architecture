@@ -1,10 +1,12 @@
 import { codexSections } from "./codex-sections";
 import { claudeSections } from "./claude-sections";
+import { opencodeSections } from "./opencode-sections";
 import type { SectionMeta } from "./types";
 
 const sectionsMap: Record<string, SectionMeta[]> = {
   codex: codexSections,
   claude: claudeSections,
+  opencode: opencodeSections,
 };
 
 export function getSections(agentName: string): SectionMeta[] {

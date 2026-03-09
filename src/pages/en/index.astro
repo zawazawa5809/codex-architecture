@@ -28,7 +28,7 @@ const t = useTranslation(lang);
       </p>
 
       <!-- Tool Cards -->
-      <div class="hero-enter-delay-3 mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
+      <div class="hero-enter-delay-3 mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
         <!-- Codex CLI Card (Active) -->
         <a
           href={getLocalePath(lang, "/codex")}
@@ -66,6 +66,29 @@ const t = useTranslation(lang);
           </h2>
           <p class="mb-4 text-sm text-[var(--color-text-secondary)]">
             {t("index.claudeDesc")}
+          </p>
+          <div class="flex items-center gap-2 text-xs text-[var(--color-accent-cyan)]">
+            <span>{t("index.cta.read")}</span>
+            <svg class="h-3 w-3 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </div>
+        </a>
+
+        <!-- OpenCode Card (Active) -->
+        <a
+          href={getLocalePath(lang, "/opencode")}
+          class="card-hover group relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-white/[0.02] p-6 text-left hover:border-[var(--color-accent-indigo)] hover:bg-white/[0.04]"
+        >
+          <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-[var(--color-accent-emerald)]/10 px-3 py-1">
+            <span class="h-2 w-2 rounded-full bg-[var(--color-accent-emerald)]"></span>
+            <span class="text-xs text-[var(--color-accent-emerald)]">{t("index.status.available")}</span>
+          </div>
+          <h2 class="mb-2 text-xl font-semibold text-[var(--color-text-primary)]">
+            OpenCode
+          </h2>
+          <p class="mb-4 text-sm text-[var(--color-text-secondary)]">
+            {t("index.opencodeDesc" as any)}
           </p>
           <div class="flex items-center gap-2 text-xs text-[var(--color-accent-cyan)]">
             <span>{t("index.cta.read")}</span>

@@ -1,0 +1,155 @@
+---
+title: "Agent System"
+order: 2
+description: "Plan/Build dual agents, subagent spawning, and context management"
+---
+
+## Dual-Agent Architecture
+
+OpenCode employs a **dual-agent** design where different agents specialize in different phases of a task. Rather than a single monolithic agent that both plans and executes, OpenCode separates these responsibilities.
+
+| Agent | Role | When Activated |
+|-------|------|----------------|
+| **General Agent** | Default conversational agent for Q&A and general assistance | Default mode |
+| **Plan Agent** | Analyzes requirements, creates structured task breakdowns | Complex multi-step tasks |
+| **Build Agent** | Executes implementation based on plans, writes and edits code | After planning or for direct implementation |
+
+This separation mirrors how experienced developers work: first understand the problem, break it into pieces, then implement each piece methodically.
+
+## The Agent Loop: SessionPrompt
+
+The core of agent execution is `SessionPrompt.prompt()`. This function drives the iterative loop where the agent receives input, reasons about it, invokes tools, and produces output.
+
+```typescript
+{/* Simplified agent loop */}
+class SessionPrompt {
+  async prompt(input: UserMessage): Promise<AgentResponse> {
+    const messages = await this.buildContext(input);
+
+    while (true) {
+      const response = await this.provider.generate(messages);
+
+      if (response.toolCalls.length === 0) {
+        return response; {/* Agent is done */}
+      }
+
+      {/* Execute tool calls and feed results back */}
+      const results = await this.executeTools(response.toolCalls);
+      messages.push(...results);
+    }
+  }
+}
+```
+
+The loop continues until the model produces a response with no tool calls, signaling that the agent has completed its task. Each iteration may invoke one or more tools, and the results are appended to the conversation context for the next iteration.
+
+## Plan Agent
+
+The Plan Agent is responsible for high-level analysis. When faced with a complex task, it:
+
+1. **Reads relevant files** to understand the current codebase state
+2. **Identifies dependencies** between components
+3. **Creates a structured task breakdown** with clear steps
+4. **Estimates scope and risks** for the implementation
+
+The Plan Agent deliberately avoids making changes. Its output is a structured plan that the Build Agent can follow.
+
+```typescript
+{/* Plan Agent system prompt excerpt */}
+const PLAN_SYSTEM = `You are a planning agent. Your job is to:
+- Analyze the user's request thoroughly
+- Read relevant code to understand the current state
+- Break the task into clear, ordered steps
+- Identify risks and dependencies
+- Do NOT make any changes to files`;
+```
+
+## Build Agent
+
+The Build Agent takes a plan (or a direct request) and executes it. It has full access to the tool system and can:
+
+- Read, write, and edit files
+- Run shell commands
+- Search the codebase with grep and glob
+- Fetch web resources
+
+The Build Agent operates iteratively, checking its work after each step and adjusting as needed.
+
+## Subagent System: The `task` Tool
+
+For complex tasks that benefit from parallelism or isolation, OpenCode supports **subagent spawning** via the `task` tool. A parent agent can delegate work to a child agent that runs in its own context.
+
+```typescript
+{/* Using the task tool to spawn a subagent */}
+{
+  "tool": "task",
+  "arguments": {
+    "description": "Write unit tests for the auth module",
+    "context": "The auth module is in src/auth/. Use vitest."
+  }
+}
+```
+
+Key properties of subagents:
+
+- **Isolated context**: Each subagent has its own message history, preventing context pollution
+- **Parallel execution**: Multiple subagents can run concurrently on independent tasks
+- **Result aggregation**: The parent agent receives a summary of the subagent's work when it completes
+
+This is particularly useful for tasks like "refactor module A and write tests for module B" where the two subtasks are independent.
+
+## Context Compaction
+
+As conversations grow long, the context window can become a bottleneck. OpenCode addresses this with **`SessionCompaction.compact()`**, which summarizes older messages while preserving recent context.
+
+```typescript
+class SessionCompaction {
+  async compact(session: Session): Promise<void> {
+    const messages = await session.messages();
+
+    if (messages.length < this.threshold) return;
+
+    {/* Split into old and recent messages */}
+    const splitPoint = messages.length - this.keepRecent;
+    const oldMessages = messages.slice(0, splitPoint);
+
+    {/* Generate a summary of old messages */}
+    const summary = await this.summarize(oldMessages);
+
+    {/* Replace old messages with summary */}
+    await session.replaceMessages(splitPoint, summary);
+  }
+}
+```
+
+The compaction process:
+
+1. **Detects threshold**: Checks if the message count exceeds a configurable limit
+2. **Splits history**: Separates old messages from recent ones that should be preserved verbatim
+3. **Generates summary**: Uses the LLM to create a concise summary of the compacted portion
+4. **Replaces in-place**: Swaps the old messages with the summary in the session store
+
+This allows long-running sessions to continue without hitting context limits, while preserving the essential information the agent needs to maintain coherence.
+
+## Agent Selection Flow
+
+```
+User Message
+    │
+    ├── Simple question? ──────→ General Agent
+    │
+    ├── Complex task? ─────────→ Plan Agent
+    │                               │
+    │                          Task Breakdown
+    │                               │
+    │                          Build Agent
+    │                               │
+    │                      ┌────────┴────────┐
+    │                      │                 │
+    │                  Subagent 1        Subagent 2
+    │                   (task)            (task)
+    │
+    └── Direct implementation? ──→ Build Agent
+```
+
+The agent selection can be automatic based on task complexity or explicitly triggered by the user through commands.

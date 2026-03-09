@@ -1,0 +1,185 @@
+---
+title: "LSP Integration"
+order: 6
+description: "Language server management, diagnostics feedback, and agent integration"
+---
+
+## Why LSP in a Coding Agent?
+
+Traditional coding agents operate without awareness of language semantics. They read and write text files but lack understanding of types, symbols, and errors that a language server provides. OpenCode bridges this gap by integrating the **Language Server Protocol (LSP)**, giving the agent access to the same intelligence that powers IDE features.
+
+This means the agent can:
+
+- Detect type errors before the user sees them
+- Navigate code via go-to-definition
+- Understand symbol relationships through hover information
+- Format code according to project standards
+
+## LSP.Manager
+
+The `LSP.Manager` is responsible for discovering, spawning, and managing language server processes. It handles the full lifecycle of each server.
+
+```typescript
+class LspManager {
+  private servers = new Map<string, LanguageServer>();
+
+  async initialize(workspacePath: string): Promise<void> {
+    const detected = await this.detectLanguageServers(workspacePath);
+
+    for (const config of detected) {
+      const server = await this.spawn(config);
+      this.servers.set(config.languageId, server);
+    }
+  }
+
+  private async detectLanguageServers(
+    path: string
+  ): Promise<ServerConfig[]> {
+    {/* Auto-detect installed language servers */}
+    const configs: ServerConfig[] = [];
+
+    if (await this.isInstalled("typescript-language-server")) {
+      configs.push({ languageId: "typescript", command: "typescript-language-server", args: ["--stdio"] });
+    }
+    if (await this.isInstalled("pyright")) {
+      configs.push({ languageId: "python", command: "pyright-langserver", args: ["--stdio"] });
+    }
+    {/* ... more language servers */}
+
+    return configs;
+  }
+}
+```
+
+### Auto-Detection
+
+The manager scans the system for known language server installations. It checks standard paths and common package manager locations.
+
+| Language | Server | Detection Method |
+|----------|--------|-----------------|
+| TypeScript/JavaScript | `typescript-language-server` | `which` lookup |
+| Python | `pyright` / `pylsp` | `which` lookup |
+| Rust | `rust-analyzer` | `which` lookup |
+| Go | `gopls` | `which` lookup |
+| C/C++ | `clangd` | `which` lookup |
+| Java | `jdtls` | Path scanning |
+
+## Diagnostics
+
+Diagnostics are the most valuable LSP feature for the agent. When the agent modifies a file, the language server analyzes the changes and reports any errors, warnings, or hints.
+
+```typescript
+interface Diagnostic {
+  range: Range;
+  severity: "error" | "warning" | "info" | "hint";
+  message: string;
+  source: string;
+  code?: string | number;
+}
+```
+
+### Diagnostics Streaming
+
+Diagnostics are streamed to clients via the `EventLspClientDiagnostics` event. When the language server publishes new diagnostics, they flow through the event system to both the agent and the UI.
+
+```typescript
+{/* Server-side diagnostics handler */}
+server.onDiagnostics((params) => {
+  const diagnostics = params.diagnostics.map(d => ({
+    file: params.uri,
+    range: d.range,
+    severity: mapSeverity(d.severity),
+    message: d.message,
+    source: d.source,
+  }));
+
+  {/* Emit to event bus for UI updates */}
+  Bus.emit("lsp:diagnostics", diagnostics);
+
+  {/* Store for agent consumption */}
+  DiagnosticsStore.update(params.uri, diagnostics);
+});
+```
+
+### Agent-Aware Diagnostics
+
+This is where LSP integration becomes powerful for an AI coding agent. After the Build Agent writes or edits a file, it can check diagnostics to verify correctness.
+
+```
+Agent writes file
+    │
+    ▼
+Language server analyzes
+    │
+    ▼
+Diagnostics published
+    │
+    ├──→ UI: Show error markers
+    │
+    └──→ Agent: Check for errors
+         │
+         ├── No errors → Continue to next task
+         │
+         └── Errors found → Auto-fix attempt
+              │
+              ▼
+         Agent reads diagnostics,
+         modifies code, re-checks
+```
+
+This creates a feedback loop where the agent can catch and fix its own mistakes before the user even reviews the output. For example, if the agent introduces a type error, the TypeScript language server flags it immediately, and the agent can correct it in the same turn.
+
+## Additional LSP Features
+
+Beyond diagnostics, OpenCode leverages several other LSP capabilities.
+
+### Go-to-Definition
+
+The agent can resolve symbol definitions to understand how code is structured.
+
+```typescript
+const definition = await server.gotoDefinition({
+  textDocument: { uri: fileUri },
+  position: { line: 10, character: 15 },
+});
+```
+
+### Hover Information
+
+Hover provides type information and documentation for symbols, helping the agent understand unfamiliar code.
+
+### Formatting
+
+Code formatting ensures that agent-generated code matches the project's style configuration.
+
+```typescript
+const edits = await server.formatting({
+  textDocument: { uri: fileUri },
+  options: { tabSize: 2, insertSpaces: true },
+});
+```
+
+## Configuration
+
+LSP behavior can be customized in `opencode.json`:
+
+```json
+{
+  "lsp": {
+    "enabled": true,
+    "servers": {
+      "typescript": {
+        "command": "typescript-language-server",
+        "args": ["--stdio"],
+        "initializationOptions": {
+          "preferences": {
+            "includeInlayParameterNameHints": "all"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Users can override auto-detected servers, add custom servers, or disable LSP entirely if not needed.

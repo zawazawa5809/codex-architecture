@@ -3,6 +3,7 @@ import { useTranslation, getLocalePath, type Lang } from "../i18n/utils";
 import LanguageToggle from "./LanguageToggle.tsx";
 import { codexSections } from "../data/codex-sections";
 import { claudeSections } from "../data/claude-sections";
+import { opencodeSections } from "../data/opencode-sections";
 
 interface Props {
   lang?: Lang;
@@ -33,6 +34,16 @@ const navGroups = [
       slug: section.slug,
       label: t(section.navKey as any),
       href: getLocalePath(lang, `/claude/${section.slug}`),
+      number: section.number,
+    })),
+  },
+  {
+    name: t("nav.group.opencode" as any),
+    agent: "opencode",
+    items: opencodeSections.map((section) => ({
+      slug: section.slug,
+      label: t(section.navKey as any),
+      href: getLocalePath(lang, `/opencode/${section.slug}`),
       number: section.number,
     })),
   },

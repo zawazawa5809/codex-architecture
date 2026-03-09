@@ -56,6 +56,16 @@ const translations = {
     "nav.claude.permissions": "権限 & セキュリティ",
     "nav.group.codex": "Codex CLI",
     "nav.group.claude": "Claude Code",
+    "nav.group.opencode": "OpenCode",
+    "nav.opencode.overview": "概要",
+    "nav.opencode.agentSystem": "エージェントシステム",
+    "nav.opencode.toolSystem": "ツールシステム",
+    "nav.opencode.providerSystem": "プロバイダーシステム",
+    "nav.opencode.tuiArch": "TUIアーキテクチャ",
+    "nav.opencode.lspIntegration": "LSP連携",
+    "nav.opencode.sessionStorage": "セッション管理",
+    "index.opencodeDesc":
+      "Anomaly製のオープンソースAIコーディングエージェント。クライアント/サーバー分離アーキテクチャ、75+プロバイダー対応、MCP/LSP統合を解説。",
   },
   en: {
     "site.title": "AI Agent Architecture Atlas",
@@ -105,6 +115,16 @@ const translations = {
     "nav.claude.permissions": "Permissions & Security",
     "nav.group.codex": "Codex CLI",
     "nav.group.claude": "Claude Code",
+    "nav.group.opencode": "OpenCode",
+    "nav.opencode.overview": "Overview",
+    "nav.opencode.agentSystem": "Agent System",
+    "nav.opencode.toolSystem": "Tool System",
+    "nav.opencode.providerSystem": "Provider System",
+    "nav.opencode.tuiArch": "TUI Architecture",
+    "nav.opencode.lspIntegration": "LSP Integration",
+    "nav.opencode.sessionStorage": "Session & Storage",
+    "index.opencodeDesc":
+      "Anomaly's open-source AI coding agent. Explore the client/server architecture, 75+ provider support, and MCP/LSP integration.",
   },
 } as const;
 

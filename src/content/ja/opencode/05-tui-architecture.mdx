@@ -1,0 +1,146 @@
+---
+title: "TUIアーキテクチャ"
+order: 5
+description: "OpenTUI/SolidJSベースTUI、Event Bus、コンポーネント設計を解説"
+---
+
+{/* TUIアーキテクチャ */}
+
+## OpenTUIフレームワーク
+
+OpenCodeのTUI（Terminal User Interface）は**OpenTUI**（@opentui/solid）という
+独自フレームワークで構築されている。OpenTUIはSolidJSのリアクティブモデルを
+ターミナル上で動作させ、Webフロントエンド開発と同様のコンポーネント指向で
+TUIアプリケーションを構築できる。
+
+## SolidJSによるリアクティブUI
+
+OpenTUIはSolidJSをレンダリングエンジンとして使用する。
+SolidJSのシグナルとエフェクトにより、状態変更が自動的にターミナル出力に反映される。
+
+```typescript
+{/* SolidJSリアクティブモデルの概念 */}
+// シグナルで状態を管理
+const [messages, setMessages] = createSignal([]);
+
+// エフェクトで状態変更を監視
+createEffect(() => {
+  // messagesが更新されるとターミナル上のUIが自動的に再描画される
+  renderMessageTimeline(messages());
+});
+```
+
+Reactの仮想DOMとは異なり、SolidJSはコンパイル時にリアクティブグラフを構築するため、
+ランタイムのオーバーヘッドが極めて小さい。これはリソースが限られた
+ターミナル環境において重要な利点である。
+
+## コンポーネント構成
+
+TUIは以下の主要コンポーネントで構成される。
+
+| コンポーネント | 説明 | 位置 |
+|---------------|------|------|
+| **Message Timeline** | 会話履歴をスクロール可能なリストで表示 | メイン領域 |
+| **Prompt Input** | ユーザー入力領域。@メンションと/コマンドに対応 | 下部 |
+| **Review Panel** | ファイル変更のレビューと承認UI | オーバーレイ |
+| **Diff Viewer** | コード差分をシンタックスハイライト付きで表示 | オーバーレイ |
+| **Status Bar** | 現在のモデル、トークン使用量、セッション情報 | 最下部 |
+
+### レイアウト構造
+
+```
+┌─────────────────────────────────────────┐
+│                Status Bar               │
+├─────────────────────────────────────────┤
+│                                         │
+│           Message Timeline              │
+│                                         │
+│  [User] テストを書いて                   │
+│                                         │
+│  [Agent] テストを分析します...           │
+│    > read src/utils.ts                  │
+│    > write src/utils.test.ts            │
+│                                         │
+│  [Agent] テストを作成しました            │
+│                                         │
+├─────────────────────────────────────────┤
+│  > Prompt Input (@mentions, /commands)  │
+└─────────────────────────────────────────┘
+```
+
+## @メンションと/コマンド
+
+Prompt Inputは特殊な入力パターンをサポートする。
+
+### @メンション
+
+`@` に続けてファイルパスを入力すると、そのファイルをコンテキストとして添付できる。
+
+```
+> @src/utils.ts この関数にエラーハンドリングを追加して
+```
+
+### /コマンド
+
+スラッシュコマンドでエージェントの動作を切り替えられる。
+
+| コマンド | 説明 |
+|----------|------|
+| `/plan` | Plan Agentに切り替える |
+| `/build` | Build Agentに切り替える |
+| `/compact` | コンテキストを圧縮する |
+| `/clear` | 会話をクリアする |
+
+## Event Bus
+
+TUIのデータフローは**Event Bus**パターンで管理される。
+`Bus.emit()` でイベントを発行し、`Bus.subscribe()` でイベントを購読する。
+
+```
+SSEストリーム ──> Bus.emit("message:chunk")
+                       |
+                       v
+              Bus.subscribe("message:chunk")
+                       |
+              ┌────────┴────────┐
+              v                 v
+     Message Timeline      Status Bar
+     (メッセージ更新)    (トークン更新)
+```
+
+### 主要イベント
+
+| イベント | 発行タイミング | 購読者 |
+|----------|---------------|--------|
+| `message:chunk` | LLMからチャンク受信時 | Message Timeline |
+| `message:complete` | メッセージ完了時 | Message Timeline, Status Bar |
+| `tool:execute` | ツール実行開始時 | Message Timeline |
+| `tool:result` | ツール実行完了時 | Message Timeline |
+| `session:compact` | コンテキスト圧縮時 | Status Bar |
+
+## SSEによるデータ同期
+
+TUIクライアントはサーバーからのSSE（Server-Sent Events）ストリームを受信し、
+Event Busを通じてUIコンポーネントに配信する。
+
+```
+サーバー (localhost:4096)
+       |
+       | SSE: data: {"type":"chunk","content":"テスト"}
+       |
+       v
+  @opencode-ai/sdk (SSEクライアント)
+       |
+       v
+  Bus.emit("message:chunk", data)
+       |
+       v
+  SolidJSシグナル更新
+       |
+       v
+  ターミナル再描画
+```
+
+この仕組みにより、サーバーサイドの処理結果がリアルタイムでTUIに反映される。
+複数のクライアントが同時に接続している場合、すべてのクライアントが
+同じSSEストリームを受信し、同期された状態を維持する。

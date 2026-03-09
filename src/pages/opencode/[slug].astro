@@ -1,0 +1,85 @@
+---
+import { getEntry, render } from "astro:content";
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { useTranslation, type Lang } from "../../i18n/utils";
+import { opencodeSections, type SectionMeta } from "../../data/opencode-sections";
+
+import OpencodeOverview from "../../diagrams/OpencodeOverview.tsx";
+import OpencodeAgentSystem from "../../diagrams/OpencodeAgentSystem.tsx";
+import OpencodeToolSystem from "../../diagrams/OpencodeToolSystem.tsx";
+import OpencodeProviderSystem from "../../diagrams/OpencodeProviderSystem.tsx";
+import OpencodeTuiArch from "../../diagrams/OpencodeTuiArch.tsx";
+import OpencodeLspIntegration from "../../diagrams/OpencodeLspIntegration.tsx";
+import OpencodeSessionStorage from "../../diagrams/OpencodeSessionStorage.tsx";
+
+const lang = "ja" as Lang;
+
+export function getStaticPaths() {
+  return opencodeSections.map((section) => ({
+    params: { slug: section.slug },
+    props: { section },
+  }));
+}
+
+interface Props {
+  section: SectionMeta;
+}
+
+const { section } = Astro.props;
+const t = useTranslation(lang);
+
+const entry = await getEntry("opencode_ja", section.entryId);
+if (!entry) throw new Error(`Content not found: opencode_ja/${section.entryId}`);
+const { Content } = await render(entry);
+
+const accentVar = `var(--color-accent-${section.accent})`;
+const diagramBorderClass = section.accent === "rose"
+  ? "border-[var(--color-accent-rose)]/20"
+  : "border-[var(--color-border)]";
+---
+
+<DocsLayout
+  title={`${entry.data.title} — OpenCode`}
+  description={entry.data.description}
+  lang={lang}
+  currentSlug={section.slug}
+  agentName="opencode"
+>
+  <div class="mb-8 flex items-center gap-3">
+    <span
+      class="flex h-8 w-8 items-center justify-center rounded-lg font-mono text-sm"
+      style={`background: color-mix(in srgb, ${accentVar} 20%, transparent); color: ${accentVar}`}
+    >
+      {section.number}
+    </span>
+    <h1 class="text-2xl font-bold text-[var(--color-text-primary)] sm:text-3xl">
+      {entry.data.title}
+    </h1>
+    {section.badge && (
+      <span
+        class="rounded-full px-3 py-1 text-xs"
+        style={`background: color-mix(in srgb, ${accentVar} 10%, transparent); color: ${accentVar}`}
+      >
+        {section.badge[lang]}
+      </span>
+    )}
+  </div>
+
+  {section.diagram && (
+    <div class={`mb-10 overflow-x-auto rounded-xl border ${diagramBorderClass} bg-white/[0.02] p-6`} style="touch-action: pinch-zoom">
+      <div>
+        {section.diagram === "OpencodeOverview" && <OpencodeOverview client:visible />}
+        {section.diagram === "OpencodeAgentSystem" && <OpencodeAgentSystem client:visible />}
+        {section.diagram === "OpencodeToolSystem" && <OpencodeToolSystem client:visible />}
+        {section.diagram === "OpencodeProviderSystem" && <OpencodeProviderSystem client:visible />}
+        {section.diagram === "OpencodeTuiArch" && <OpencodeTuiArch client:visible />}
+        {section.diagram === "OpencodeLspIntegration" && <OpencodeLspIntegration client:visible />}
+        {section.diagram === "OpencodeSessionStorage" && <OpencodeSessionStorage client:visible />}
+      </div>
+    </div>
+  )}
+
+  <div class="prose-dark prose prose-lg max-w-none">
+    <Content />
+  </div>
+</DocsLayout>

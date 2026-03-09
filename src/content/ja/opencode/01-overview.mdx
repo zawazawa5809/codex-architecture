@@ -1,0 +1,90 @@
+---
+title: "概要"
+order: 1
+description: "OpenCodeの全体像、クライアント/サーバーアーキテクチャ、主要機能を解説"
+---
+
+{/* OpenCode 概要 */}
+
+## OpenCodeとは
+
+OpenCodeは、TypeScript（Bun）で構築された**オープンソースのAIコーディングエージェント**である。
+クライアント/サーバー分離アーキテクチャを採用し、TUI・デスクトップ・Web・IDEなど
+複数のクライアントから同一のサーバーに接続できる設計が最大の特徴である。
+
+## クライアント/サーバーアーキテクチャ
+
+OpenCodeのサーバーは**Honoフレームワーク**上に構築され、`localhost:4096`にバインドされる。
+クライアントとサーバー間の通信には**REST API + SSE（Server-Sent Events）**を使用する。
+
+```
+クライアント群                         サーバー
+┌──────────┐                    ┌──────────────────┐
+│   TUI    │──── REST + SSE ──>│                  │
+├──────────┤                    │   Hono Server    │
+│ Desktop  │──── REST + SSE ──>│  localhost:4096  │
+├──────────┤                    │                  │
+│   Web    │──── REST + SSE ──>│  ┌────────────┐  │
+├──────────┤                    │  │ Agent Loop │  │
+│   IDE    │──── REST + SSE ──>│  │ Tool Exec  │  │
+└──────────┘                    │  │ LLM Call   │  │
+       |                        │  └────────────┘  │
+  @opencode-ai/sdk              └──────────────────┘
+```
+
+すべてのクライアントは `@opencode-ai/sdk` を通じてサーバーと通信する。
+これにより、UIの実装を問わず統一されたAPIでエージェント機能にアクセスできる。
+
+## 3つの実行モード
+
+| モード | 説明 | 用途 |
+|--------|------|------|
+| `tui` | ターミナルUIを起動し対話的に操作する | 日常的な開発作業 |
+| `server` | サーバーのみを起動しクライアントを待ち受ける | リモート接続、カスタムUI |
+| `run` | 単発のプロンプトを実行し終了する | CI/CD、スクリプト連携 |
+
+## 主要機能
+
+### デュアルエージェント
+
+OpenCodeは**Plan Agent**と**Build Agent**の2つの専門エージェントを持つ。
+Planが要件を分析しタスクを分解、Buildが実装を実行する。
+加えて**General Agent**がデフォルトの会話を担当する。
+
+### 75+プロバイダー対応
+
+Vercel AI SDKを基盤とし、Anthropic、OpenAI、Google Gemini、Bedrock、
+OpenRouter、Ollama、LM Studioなど75以上のLLMプロバイダーに対応する。
+
+### ターミナルUI
+
+OpenTUI（@opentui/solid）により、SolidJSのリアクティブモデルを
+ターミナル上で動作させる独自のTUIフレームワークを搭載する。
+
+### LSP連携
+
+Language Server Protocolとの統合により、診断情報やコード補完を
+エージェントの意思決定に活用できる。
+
+## 他のAIコーディングエージェントとの比較
+
+| 特徴 | OpenCode | Claude Code | Codex CLI |
+|------|----------|-------------|-----------|
+| アーキテクチャ | クライアント/サーバー | スタンドアロン | スタンドアロン |
+| 通信方式 | REST + SSE | プロセス内 | プロセス内 |
+| UI | TUI / Desktop / Web / IDE | CLI / VS Code / JetBrains | CLI |
+| ランタイム | Bun (TypeScript) | Node.js (TypeScript) | Node.js (TypeScript) |
+| LLMプロバイダー | 75+ (Vercel AI SDK) | Anthropic専用 | OpenAI専用 |
+| 拡張方式 | MCP + プラグイン | MCP + Skills + Hooks | MCP |
+| サンドボックス | なし (Permission Gate) | Bash制限 | Docker / Seatbelt |
+
+## 次のステップ
+
+以降のセクションでは、OpenCodeの各機能を詳しく解説する。
+
+- [エージェントシステム](/codex-architecture/opencode/agent-system) — Plan/Buildデュアルエージェント
+- [ツールシステム](/codex-architecture/opencode/tool-system) — ビルトインツールとMCP拡張
+- [プロバイダーシステム](/codex-architecture/opencode/provider-system) — マルチLLMプロバイダー抽象化
+- [TUIアーキテクチャ](/codex-architecture/opencode/tui-architecture) — ターミナルUIの設計
+- [LSP連携](/codex-architecture/opencode/lsp-integration) — 言語サーバーとの統合
+- [セッション管理](/codex-architecture/opencode/session-storage) — 永続化とスナップショット

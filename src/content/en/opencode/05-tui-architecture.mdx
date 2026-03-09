@@ -1,0 +1,166 @@
+---
+title: "TUI Architecture"
+order: 5
+description: "OpenTUI/SolidJS terminal UI, Event Bus, and component design"
+---
+
+## Terminal UI with SolidJS
+
+OpenCode's Terminal User Interface (TUI) is built on **OpenTUI** (`@opentui/solid`), a framework that renders SolidJS components directly in the terminal. This approach brings the reactive programming model of modern web frameworks to the terminal, replacing traditional ncurses-style imperative rendering with declarative, component-based UI.
+
+## OpenTUI: SolidJS for the Terminal
+
+OpenTUI maps SolidJS primitives to terminal output. Components written in familiar JSX syntax are rendered as terminal characters, colors, and layouts instead of DOM elements.
+
+```typescript
+import { render } from "@opentui/solid";
+import { createSignal } from "solid-js";
+
+function Counter() {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <box border="single" padding={1}>
+      <text>Count: {count()}</text>
+      <button onClick={() => setCount(c => c + 1)}>
+        Increment
+      </button>
+    </box>
+  );
+}
+
+render(() => <Counter />, process.stdout);
+```
+
+Key advantages of this approach:
+
+| Aspect | Benefit |
+|--------|---------|
+| **Declarative** | UI is a function of state, not imperative draw calls |
+| **Reactive** | Fine-grained reactivity via SolidJS signals — only changed parts re-render |
+| **Component-based** | Reusable, composable UI pieces |
+| **Familiar** | Developers with React/SolidJS experience can contribute immediately |
+
+## Core Components
+
+The TUI is composed of several main components that together form the chat interface.
+
+### Message Timeline
+
+The message timeline displays the conversation history between the user and the agent. Each message is rendered with role-appropriate styling.
+
+```typescript
+function MessageTimeline(props: { messages: Message[] }) {
+  return (
+    <scroll-view flex={1}>
+      <For each={props.messages}>
+        {(msg) => (
+          <MessageBubble
+            role={msg.role}
+            content={msg.content}
+            toolCalls={msg.toolCalls}
+          />
+        )}
+      </For>
+    </scroll-view>
+  );
+}
+```
+
+Messages from the agent include rendered markdown, code blocks with syntax highlighting, and expandable tool call results.
+
+### Prompt Input
+
+The prompt input supports rich interaction patterns:
+
+- **Text input** with cursor navigation and editing
+- **@mentions** for referencing files and symbols
+- **`/commands`** for switching modes and triggering actions
+- **Multi-line editing** for complex prompts
+
+```typescript
+function PromptInput(props: { onSubmit: (text: string) => void }) {
+  const [text, setText] = createSignal("");
+
+  return (
+    <box border="single">
+      <text-input
+        value={text()}
+        onChange={setText}
+        onSubmit={() => {
+          props.onSubmit(text());
+          setText("");
+        }}
+        placeholder="Type a message..."
+      />
+    </box>
+  );
+}
+```
+
+### Review Panel
+
+When the agent requests permission for a mutating operation, the review panel displays the proposed action and awaits user approval.
+
+### Diff Viewer
+
+For file modifications, the diff viewer shows a side-by-side or unified diff of proposed changes, allowing the user to review exactly what the agent intends to write.
+
+## Event Bus
+
+The TUI's reactivity is driven by an **Event Bus** pattern. Server events flow through the bus, and UI components subscribe to relevant events.
+
+```typescript
+class Bus {
+  private listeners = new Map<string, Set<Callback>>();
+
+  emit(event: string, data: unknown): void {
+    const callbacks = this.listeners.get(event);
+    if (callbacks) {
+      for (const cb of callbacks) cb(data);
+    }
+  }
+
+  subscribe(event: string, callback: Callback): Unsubscribe {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event)!.add(callback);
+
+    return () => this.listeners.get(event)?.delete(callback);
+  }
+}
+```
+
+### Event Flow
+
+```
+SSE Stream (Server)
+    │
+    ▼
+Bus.emit("agent:message:delta", chunk)
+Bus.emit("tool:call:begin", toolCall)
+Bus.emit("tool:call:result", result)
+Bus.emit("session:compacted", summary)
+    │
+    ▼
+UI Components (subscribers)
+    │
+    ├── MessageTimeline  ← agent:message:delta
+    ├── ToolCallDisplay  ← tool:call:begin, tool:call:result
+    ├── ReviewPanel      ← tool:approval:request
+    └── StatusBar        ← session:compacted
+```
+
+The bus decouples the SSE stream processing from the UI rendering. Components only re-render when their subscribed events fire, keeping the terminal output efficient.
+
+## Rendering Pipeline
+
+The rendering pipeline converts SolidJS component trees into terminal escape sequences.
+
+1. **Component tree evaluation**: SolidJS evaluates reactive expressions and produces a virtual terminal layout
+2. **Layout calculation**: Box model calculations determine position and size of each element
+3. **Diff computation**: Only cells that changed since the last frame are identified
+4. **Terminal output**: Changed cells are written to stdout using ANSI escape sequences
+
+This differential rendering approach minimizes terminal I/O, resulting in a smooth, flicker-free experience even during rapid agent output streaming.

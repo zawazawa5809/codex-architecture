@@ -1,0 +1,110 @@
+---
+title: "Overview"
+order: 1
+description: "OpenCode's architecture overview, client/server separation, and key features"
+---
+
+## What Is OpenCode?
+
+OpenCode is an open-source AI coding agent built with TypeScript and Bun. Unlike monolithic CLI tools, OpenCode follows a **client/server architecture** where a central server exposes a REST + SSE API, and multiple clients — TUI, Desktop, Web, and IDE plugins — connect to it through a unified SDK.
+
+This separation of concerns means the agent logic lives in one place while the user experience can be tailored to any environment.
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Clients                        │
+│  ┌─────┐  ┌─────────┐  ┌─────┐  ┌───────────┐  │
+│  │ TUI │  │ Desktop │  │ Web │  │ IDE Plugin│  │
+│  └──┬──┘  └────┬────┘  └──┬──┘  └─────┬─────┘  │
+│     │          │          │            │         │
+│     └──────────┴──────┬───┴────────────┘         │
+│                       │                          │
+│            @opencode-ai/sdk                      │
+└───────────────────────┬─────────────────────────┘
+                        │ REST + SSE
+┌───────────────────────┴─────────────────────────┐
+│              OpenCode Server (Hono)              │
+│              localhost:4096                       │
+│                                                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
+│  │  Agents  │ │  Tools   │ │  Provider Layer  │ │
+│  └──────────┘ └──────────┘ └──────────────────┘ │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
+│  │   LSP    │ │ Sessions │ │  Storage (SQLite)│ │
+│  └──────────┘ └──────────┘ └──────────────────┘ │
+└──────────────────────────────────────────────────┘
+```
+
+## Server: Hono on Bun
+
+The server is built on the **Hono** framework, a lightweight web framework optimized for edge and server-side TypeScript. It binds to `localhost:4096` and exposes endpoints for session management, message streaming, and tool execution.
+
+Key characteristics of the server:
+
+| Aspect | Detail |
+|--------|--------|
+| Runtime | Bun (TypeScript) |
+| Framework | Hono |
+| Binding | `localhost:4096` |
+| Transport | REST for commands, SSE for streaming |
+| Storage | SQLite via Drizzle ORM |
+
+## Communication: REST + SSE
+
+OpenCode uses a dual-protocol approach for client-server communication.
+
+- **REST**: Used for discrete operations such as creating sessions, listing messages, and invoking tools. Standard request-response semantics.
+- **SSE (Server-Sent Events)**: Used for streaming agent output in real time. The client opens a persistent connection and receives incremental updates as the agent thinks and acts.
+
+```typescript
+{/* Simplified client connection flow */}
+import { OpenCode } from "@opencode-ai/sdk";
+
+const client = new OpenCode({ baseUrl: "http://localhost:4096" });
+
+{/* REST: create a session */}
+const session = await client.session.create();
+
+{/* SSE: stream agent responses */}
+const stream = client.session.chat(session.id, {
+  message: "Refactor the auth module",
+});
+
+for await (const event of stream) {
+  console.log(event.type, event.data);
+}
+```
+
+## The Unified SDK
+
+All clients use **`@opencode-ai/sdk`** to communicate with the server. This ensures consistent behavior regardless of whether the user is in a terminal, a desktop app, or a browser. The SDK handles:
+
+- Session lifecycle management
+- Message serialization and deserialization
+- SSE stream consumption and reconnection
+- Tool result submission back to the server
+
+## Key Design Principles
+
+1. **Client agnosticism**: The server has zero knowledge of which client is connected. Any application that speaks REST + SSE can be an OpenCode frontend.
+2. **Single source of truth**: All agent state, session history, and tool results live in the server's SQLite database. Clients are stateless views.
+3. **Extensibility via MCP**: External tools integrate through the Model Context Protocol, configured in `opencode.json`.
+4. **Multi-provider support**: Over 75 LLM providers are available through the Vercel AI SDK abstraction layer.
+
+## Project Structure
+
+```
+opencode/
+├── packages/
+│   ├── core/           # Server, agents, tools, providers
+│   ├── tui/            # Terminal UI (OpenTUI + SolidJS)
+│   ├── sdk/            # @opencode-ai/sdk client library
+│   ├── desktop/        # Desktop client (Tauri)
+│   └── web/            # Web client
+├── opencode.json       # MCP and plugin configuration
+└── drizzle/            # Database migrations
+```
+
+The following sections dive into each major subsystem: the agent system, tool system, provider layer, TUI architecture, LSP integration, and session storage.
